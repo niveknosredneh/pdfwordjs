@@ -1,398 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <meta charset="UTF-8">
-    <title>PDF Scanner</title>
-    <style>
-        :root {
-            --sidebar-width: 320px;
-            --accent: #ccebb8;
-            --accent-dark: #8cc543;
-            --border: #ddd;
-            --bg: #ecf0f1;
-            --text: #2d3436;
-            --highlight-color: rgba(255, 230, 0, 0.4);
-            --highlight-current: rgba(255, 150, 0, 0.6);
-        }
-
-        * { box-sizing: border-box; }
-
-        body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            margin: 0;
-            display: flex;
-            height: 100vh;
-            background: var(--bg);
-            overflow: hidden;
-            color: var(--text);
-        }
-
-        #sidebar {
-            width: var(--sidebar-width);
-            min-width: 200px;
-            max-width: 800px;
-            background: #fff;
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            box-shadow: 4px 0 10px rgba(0,0,0,0.05);
-            flex-shrink: 0;
-            position: relative;
-        }
-
-        .header { padding: 12px; background: var(--accent); border-bottom: 1px solid rgba(0,0,0,0.1); }
-        .header-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-
-        .btn-action {
-            background: rgba(255,255,255,0.9); border: 1px solid rgba(0,0,0,0.1); color: #333;
-            border-radius: 6px; cursor: pointer; font-size: 0.85rem; padding: 6px 12px;
-            font-weight: 500; transition: all 0.2s; flex: 1;
-        }
-        .btn-action:hover { background: #fff; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .btn-clear { background: #ff7675; color: white; border: none; flex: 0 0 auto; }
-        .btn-clear:hover { background: #d63031; }
-
-        .stats-bar {
-            padding: 8px 12px; background: #f8f9fa; border-bottom: 1px solid var(--border);
-            font-size: 0.75rem; display: flex; justify-content: space-between; color: #666;
-        }
-
-        .progress-bar-wrap { height: 4px; background: rgba(0,0,0,0.05); margin-top: 8px; border-radius: 2px; overflow: hidden; }
-        .progress-bar { height: 100%; background: var(--accent-dark); width: 0%; transition: width 0.3s; }
-
-        .results-area { flex: 1; overflow-y: auto; padding: 12px; }
-
-        .doc-card {
-            border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 8px;
-            cursor: pointer; transition: all 0.2s; background: #fff;
-        }
-        .doc-card:hover { border-color: var(--accent-dark); background: #fdfdfd; }
-        .doc-card.active { border-color: var(--accent-dark); background: #e8f5e9; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
-        .doc-name { font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; color: var(--text); word-break: break-word; line-height: 1.4; }
-
-        .badge-grid { display: flex; flex-wrap: wrap; gap: 4px; }
-        .badge {
-            font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; background: var(--accent);
-            color: #2d3436; cursor: pointer; user-select: none; border: 1px solid rgba(0,0,0,0.05); font-weight: 500;
-        }
-        .badge:hover { background: var(--accent-dark); color: white; transform: translateY(-1px); }
-
-        .status-msg { text-align: center; color: #b2bec3; margin-top: 60px; }
-        .scanning-msg { color: #636e72; font-style: italic; padding: 20px; text-align: center; }
-
-        #resizer {
-            width: 6px; cursor: col-resize; background: #dfe6e9; transition: background 0.2s;
-            z-index: 10; flex-shrink: 0;
-        }
-        #resizer:hover, body.dragging #resizer { background: var(--accent-dark); }
-
-        .viewer-container {
-            flex: 1; background: #525659; position: relative; overflow: hidden; display: flex; flex-direction: column;
-        }
-
-        .viewer-toolbar {
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-            padding: 6px 12px; background: #323639; color: white; z-index: 10; flex-shrink: 0; flex-wrap: wrap;
-        }
-        .viewer-toolbar button {
-            background: rgba(255,255,255,0.1); border: none; color: white; padding: 5px 10px;
-            border-radius: 4px; cursor: pointer; font-size: 0.8rem; transition: background 0.2s;
-        }
-        .viewer-toolbar button:hover { background: rgba(255,255,255,0.2); }
-        .viewer-toolbar .zoom-level { font-size: 0.8rem; min-width: 48px; text-align: center; color: #ddd; }
-        .viewer-toolbar .separator { color: #555; margin: 0 4px; }
-
-        .page-input, .match-input {
-            width: 50px;
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.2);
-            color: white;
-            text-align: center;
-            padding: 4px 6px;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            font-family: monospace;
-        }
-        .page-input:focus, .match-input:focus {
-            outline: none;
-            border-color: var(--accent);
-            background: rgba(255,255,255,0.15);
-        }
-
-        .viewer-scroll { flex: 1; overflow: auto; position: relative; }
-        #pdfViewer { margin: 0 auto; position: relative; transform-origin: top center; }
-
-        .heatmap-track {
-            position: absolute;
-            right: 0;
-            top: 0;
-            bottom: 0;
-            width: 14px;
-            background: rgba(0,0,0,0.25);
-            pointer-events: none;
-            z-index: 100;
-            overflow: hidden;
-        }
-
-        .heatmap-bar {
-            position: absolute;
-            left: 2px;
-            right: 2px;
-            background: var(--accent);
-            opacity: 0.7;
-            border-radius: 1px;
-            min-height: 2px;
-        }
-
-        .heatmap-bar.current-match {
-            background: #ff6b00;
-            opacity: 1;
-            box-shadow: 0 0 4px rgba(255, 107, 0, 0.6);
-        }
-
-        .heatmap-thumb {
-            position: absolute;
-            right: 0;
-            width: 14px;
-            height: 30px;
-            background: rgba(255,255,255,0.15);
-            border-radius: 3px;
-            pointer-events: auto;
-            cursor: grab;
-            z-index: 101;
-        }
-
-        .pdf-page {
-            position: relative; margin: 16px auto; box-shadow: 0 4px 12px rgba(0,0,0,0.3); background: white;
-        }
-        .pdf-page canvas { display: block; }
-
-        .textLayer {
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            overflow: hidden; opacity: 0.2; line-height: 1;
-        }
-        .textLayer > span {
-            color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%;
-        }
-        .textLayer ::selection { background: rgba(0, 0, 255, 0.3); }
-
-        .highlight-mark {
-            position: absolute; background: var(--highlight-color); border-radius: 2px;
-            pointer-events: none; z-index: 1;
-        }
-        .highlight-mark.current {
-            background: var(--highlight-current); outline: 2px solid #ff6b00; z-index: 2;
-        }
-
-        .page-placeholder {
-            position: relative; margin: 16px auto; background: #666;
-            display: flex; align-items: center; justify-content: center;
-            color: #999; font-size: 0.85rem;
-        }
-
-        #navBar {
-            display: none; padding: 6px 12px; background: #1e272e; color: white;
-            gap: 8px; align-items: center; font-size: 0.85rem; border-top: 1px solid rgba(255,255,255,0.1);
-            flex-shrink: 0;
-        }
-        #navBar.active { display: flex; }
-
-        .nav-controls { display: flex; align-items: center; gap: 4px; }
-        .nav-btn {
-            background: rgba(255,255,255,0.1); border: none; color: white; padding: 4px 10px;
-            border-radius: 4px; cursor: pointer; font-size: 0.8rem;
-        }
-        .nav-btn:hover { background: rgba(255,255,255,0.2); }
-        .nav-clear {
-            background: none; border: none; color: #ff7675; cursor: pointer;
-            font-size: 1rem; margin-left: 4px; padding: 4px;
-        }
-
-        .keyword-select {
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.2);
-            color: white;
-            padding: 3px 6px;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            cursor: pointer;
-            max-width: 120px;
-        }
-        .keyword-select option {
-            background: #333;
-            color: white;
-        }
-        .keyword-select:focus {
-            outline: none;
-            border-color: var(--accent);
-        }
-
-        .toggle-container {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-left: 8px;
-            padding-left: 8px;
-            border-left: 1px solid rgba(255,255,255,0.15);
-        }
-        .toggle-label { font-size: 0.75rem; color: #aaa; }
-        .toggle-switch {
-            position: relative;
-            width: 32px;
-            height: 16px;
-            cursor: pointer;
-        }
-        .toggle-switch input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider {
-            position: absolute; inset: 0;
-            background: #555; border-radius: 8px; transition: 0.2s;
-        }
-        .toggle-slider::before {
-            content: '';
-            position: absolute;
-            width: 12px; height: 12px;
-            left: 2px; top: 2px;
-            background: white; border-radius: 50%;
-            transition: 0.2s;
-        }
-        .toggle-switch input:checked + .toggle-slider { background: var(--accent-dark); }
-        .toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); }
-
-        #viewerLoader {
-            position: absolute; inset: 0; background: #525659; display: none;
-            justify-content: center; align-items: center; z-index: 20;
-            color: white; font-size: 1rem; flex-direction: column; gap: 12px;
-        }
-        .spinner {
-            width: 30px; height: 30px; border: 3px solid rgba(255,255,255,0.3);
-            border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        #keywordManager {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); z-index: 100; justify-content: center; align-items: center;
-        }
-        .modal {
-            background: white; padding: 24px; border-radius: 12px; width: 450px; max-height: 85%;
-            display: flex; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-        }
-        .modal h3 { margin-top: 0; }
-        #keywordInput {
-            flex: 1; min-height: 350px; padding: 12px; font-family: monospace;
-            border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; resize: none;
-        }
-        .modal-footer { margin-top: 20px; display: flex; justify-content: flex-end; gap: 12px; }
-
-        .attribution {
-            font-size: 0.7rem; padding: 8px; width: 100%; background: rgba(255,255,255,0.8);
-            border-top: 1px solid var(--border); color: #999; text-align: right;
-        }
-
-        .keyboard-hint {
-            font-size: 0.7rem;
-            color: #777;
-            text-align: center;
-            padding: 4px;
-            background: rgba(0,0,0,0.02);
-            border-top: 1px solid var(--border);
-        }
-    </style>
-    <script src="keywords.js"></script>
-</head>
-<body>
-
-<div id="sidebar" class="sidebar">
-    <div class="header">
-        <div class="header-top">
-            <button class="btn-action" onclick="toggleKeywordManager()">Keywords</button>
-            <button class="btn-action" onclick="document.getElementById('folderInput').click()">Select Folder</button>
-            <button class="btn-action btn-clear" onclick="clearAllResults()" title="Clear everything">Clear</button>
-        </div>
-        <div class="progress-bar-wrap">
-            <div class="progress-bar" id="progressBar"></div>
-        </div>
-    </div>
-
-    <div class="stats-bar" id="statsBar">
-        <span>Documents: <strong id="countDocs">0</strong></span>
-        <span>Total Matches: <strong id="countMatches">0</strong></span>
-    </div>
-
-    <div id="results" class="results-area">
-        <h1 class="status-msg">&#10548;</h1>
-        <h1 class="status-msg">Drop a folder to begin scanning</h1>
-    </div>
-
-    <input type="file" id="folderInput" webkitdirectory directory multiple accept="application/pdf" style="display:none">
-    <div class="keyboard-hint">Ctrl+Scroll to zoom &middot; G to go to page</div>
-    <p class="attribution">Kevin Henderson - <b>31/03/2026</b></p>
-</div>
-
-<div id="resizer"></div>
-
-<div class="viewer-container">
-    <div id="viewerLoader">
-        <div class="spinner"></div>
-        <span id="loaderText">Loading PDF...</span>
-    </div>
-
-    <div class="viewer-toolbar">
-        <button onclick="zoomOut()" title="Zoom Out (Ctrl+-)">-</button>
-        <span class="zoom-level" id="zoomLevel">100%</span>
-        <button onclick="zoomIn()" title="Zoom In (Ctrl++)">+</button>
-        <button onclick="zoomFit()" title="Fit Width">Fit</button>
-        <button onclick="zoomActual()" title="Actual Size">1:1</button>
-        <span class="separator">|</span>
-        <span style="font-size:0.75rem; color:#888;">Page</span>
-        <input type="number" class="page-input" id="pageInput" min="1" placeholder="0" title="Go to page (G)">
-        <span style="font-size:0.75rem; color:#888;">/ <span id="pageTotal">0</span></span>
-        <button onclick="prevPage()" title="Previous page">&#8592;</button>
-        <button onclick="nextPage()" title="Next page">&#8594;</button>
-    </div>
-
-    <div class="viewer-scroll" id="viewerScroll">
-        <div id="pdfViewer"></div>
-    </div>
-    <div class="heatmap-track" id="heatmapTrack"></div>
-    <div class="heatmap-thumb" id="heatmapThumb"></div>
-
-    <div id="navBar">
-        <div class="nav-controls">
-            <button class="nav-btn" onclick="findPrev()" title="Previous match">&#8592;</button>
-            <button class="nav-btn" onclick="findNext()" title="Next match">&#8594;</button>
-        </div>
-        <select class="keyword-select" id="keywordSelect" title="Switch keyword"></select>
-        <span style="font-size:0.75rem; color:#888;">Match</span>
-        <input type="number" class="match-input" id="matchInput" min="1" placeholder="0" title="Go to match number">
-        <span style="font-size:0.75rem; color:#888;">/ <span id="matchTotal">0</span></span>
-        <span style="color:#00d2d3; font-weight:600; font-family:monospace;" id="matchCounter">0 / 0</span>
-        <button class="nav-clear" onclick="clearSearch()" title="Clear search">&#10005;</button>
-        <div class="toggle-container">
-            <span class="toggle-label">Animate</span>
-            <label class="toggle-switch">
-                <input type="checkbox" id="animateToggle" checked>
-                <span class="toggle-slider"></span>
-            </label>
-        </div>
-    </div>
-</div>
-
-<div id="keywordManager">
-    <div class="modal">
-        <h3>Manage Keywords</h3>
-        <p>Edit your search terms (one per line). Changes apply to new scans.</p>
-        <textarea id="keywordInput"></textarea>
-        <div class="modal-footer">
-            <button onclick="toggleKeywordManager()" class="btn-action" style="flex:none; width:100px;">Cancel</button>
-            <button onclick="updateKeywordsFromUI()" class="btn-action" style="flex:none; width:120px; background:#3498db; color:white; border:none;">Save & Apply</button>
-        </div>
-    </div>
-</div>
-
-<script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 // State
@@ -419,6 +24,7 @@ let textPageCache = {};
 let docTextCache = {};
 
 let smoothScrollEnabled = true;
+let isNavigating = false;
 
 let bgRenderRunning = false;
 let bgRenderQueue = [];
@@ -427,10 +33,13 @@ let bgRenderQueue = [];
 const viewer = document.getElementById('pdfViewer');
 const viewerScroll = document.getElementById('viewerScroll');
 const loader = document.getElementById('viewerLoader');
-const loaderText = document.getElementById('loaderText');
+const loaderFilename = document.getElementById('loaderFilename');
+const loaderStatus = document.getElementById('loaderStatus');
+const loaderProgressFill = document.getElementById('loaderProgressFill');
 const matchCounter = document.getElementById('matchCounter');
 const matchTotal = document.getElementById('matchTotal');
-const navBar = document.getElementById('navBar');
+const navGroup = document.getElementById('navGroup');
+const navSep = document.getElementById('navSep');
 const zoomLevelEl = document.getElementById('zoomLevel');
 const pageInput = document.getElementById('pageInput');
 const pageTotal = document.getElementById('pageTotal');
@@ -442,6 +51,25 @@ const sidebar = document.getElementById('sidebar');
 const animateToggle = document.getElementById('animateToggle');
 const heatmapTrack = document.getElementById('heatmapTrack');
 const heatmapThumb = document.getElementById('heatmapThumb');
+
+function toggleTheme() {
+    const html = document.documentElement;
+    if (html.getAttribute('data-theme') === 'light') {
+        html.setAttribute('data-theme', 'dark');
+        localStorage.setItem('pdf_theme', 'dark');
+    } else {
+        html.setAttribute('data-theme', 'light');
+        localStorage.setItem('pdf_theme', 'light');
+    }
+    updateHeatmap();
+}
+
+(function() {
+    const savedTheme = localStorage.getItem('pdf_theme');
+    if (savedTheme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+    }
+})();
 
 // ========== SIDEBAR / SCANNING ==========
 
@@ -470,7 +98,8 @@ function clearAllResults() {
         textPageCache = {};
         docTextCache = {};
         cancelBgRender();
-        navBar.classList.remove('active');
+        navGroup.classList.remove('active');
+        navSep.style.display = 'none';
         progressBar.style.width = '0%';
         pageInput.value = '';
         pageTotal.textContent = '0';
@@ -523,6 +152,10 @@ async function processFiles(files) {
         const url = URL.createObjectURL(file);
         objectUrls.push(url);
 
+        if (resultsArea.querySelector('.scanning-msg')) {
+            resultsArea.querySelector('.scanning-msg').textContent = `Scanning ${i + 1} / ${files.length}: ${file.name}`;
+        }
+
         try {
             const pdf = await pdfjsLib.getDocument({ url, verbosity: 0 }).promise;
             let text = "";
@@ -548,7 +181,7 @@ async function processFiles(files) {
                 text += pageText + " ";
             }
 
-            docTextCache[url] = { totalPages: pdf.numPages, pages: pageTextData };
+            docTextCache[url] = { totalPages: pdf.numPages, pages: pageTextData, fileName: file.name };
 
             const matches = text.match(combinedRegex) || [];
             const counts = {};
@@ -561,15 +194,18 @@ async function processFiles(files) {
                 fileTotalMatches++;
             });
 
+            totalDocsFound++;
+            
             if (fileTotalMatches > 0) {
                 if (matchedInSession === 0 && resultsArea.querySelector('.scanning-msg')) {
                     resultsArea.innerHTML = "";
                 }
                 renderCard(file.name, counts, url);
                 totalMatchesFound += fileTotalMatches;
-                totalDocsFound++;
                 matchedInSession++;
                 updateStats();
+            } else {
+                renderNoMatchCard(file.name, url);
             }
         } catch (err) {
             console.error("Error scanning:", file.name, err);
@@ -582,13 +218,20 @@ async function processFiles(files) {
     }
     if (matchedInSession === 0 && resultsArea.innerHTML === "") {
         resultsArea.innerHTML = "<p class='status-msg'>No matches found in the selected folder.</p>";
+    } else if (matchedInSession > 0) {
+        const summary = document.createElement('p');
+        summary.className = 'status-msg';
+        summary.style.marginTop = '12px';
+        summary.style.color = 'var(--green-light)';
+        summary.textContent = `Done — ${matchedInSession} document${matchedInSession > 1 ? 's' : ''} with matches`;
+        resultsArea.appendChild(summary);
     }
 }
 
 function renderCard(name, counts, url) {
     const card = document.createElement('div');
     card.className = 'doc-card';
-    card.onclick = () => { setActiveCard(card); loadPDF(url); };
+    card.onclick = () => { setActiveCard(card); loadPDF(url); closeMobileSidebar(); };
     card.innerHTML = `<div class="doc-name">${name}</div>`;
 
     const grid = document.createElement('div');
@@ -599,10 +242,12 @@ function renderCard(name, counts, url) {
         if (count > 0) {
             const b = document.createElement('div');
             b.className = 'badge';
+            b.dataset.keyword = k;
             b.textContent = `${k}: ${count}`;
             b.onclick = (e) => {
                 e.stopPropagation();
                 setActiveCard(card);
+                closeMobileSidebar();
                 if (currentDocUrl === url) {
                     cycleSearch(k);
                 } else {
@@ -613,6 +258,14 @@ function renderCard(name, counts, url) {
         }
     });
     card.appendChild(grid);
+    resultsArea.appendChild(card);
+}
+
+function renderNoMatchCard(name, url) {
+    const card = document.createElement('div');
+    card.className = 'doc-card doc-card-minimal';
+    card.onclick = () => { setActiveCard(card); loadPDF(url); closeMobileSidebar(); };
+    card.innerHTML = `<div class="doc-name">${name}</div>`;
     resultsArea.appendChild(card);
 }
 
@@ -634,7 +287,9 @@ async function loadPDF(fileUrl, keyword = "") {
     cancelBgRender();
 
     loader.style.display = 'flex';
-    loaderText.textContent = 'Loading PDF...';
+    loaderFilename.textContent = 'Loading PDF...';
+    loaderStatus.textContent = 'Initializing...';
+    loaderProgressFill.style.width = '10%';
     viewer.innerHTML = '';
     viewer.style.transform = '';
     renderedPages.clear();
@@ -650,8 +305,12 @@ async function loadPDF(fileUrl, keyword = "") {
         currentDocUrl = fileUrl;
         totalPages = pdfDoc.numPages;
 
-        loaderText.textContent = `Setting up ${totalPages} pages...`;
+        loaderStatus.textContent = `Setting up ${totalPages} pages...`;
+        loaderProgressFill.style.width = '30%';
         await setupVirtualPages();
+
+        loaderStatus.textContent = 'Extracting text content...';
+        loaderProgressFill.style.width = '60%';
 
         // Copy pre-extracted text from scan cache
         const cached = docTextCache[fileUrl];
@@ -659,9 +318,11 @@ async function loadPDF(fileUrl, keyword = "") {
             for (let i = 0; i < cached.pages.length; i++) {
                 textPageCache[i + 1] = cached.pages[i];
             }
+            loaderProgressFill.style.width = '80%';
             precomputeAllSearches();
         }
 
+        loaderProgressFill.style.width = '100%';
         loader.style.display = 'none';
         updatePageInfo();
         updateZoomDisplay();
@@ -674,7 +335,9 @@ async function loadPDF(fileUrl, keyword = "") {
             performSearch(keyword);
         }
     } catch (err) {
-        loaderText.textContent = 'Error loading PDF: ' + err.message;
+        loaderFilename.textContent = 'Error loading PDF';
+        loaderStatus.textContent = err.message;
+        loaderProgressFill.style.width = '0%';
         console.error('PDF load error:', err);
     }
 }
@@ -734,7 +397,7 @@ function renderVisiblePages() {
 
             const inView = pageBottom > viewStart && pageTop < viewEnd;
 
-            if (inView && !renderedPages.has(i)) {
+            if (inView && !isPageRendered(i)) {
                 renderPageNow(i);
             }
         }
@@ -747,7 +410,7 @@ function startBgRender() {
 
     bgRenderQueue = [];
     for (let i = 1; i <= totalPages; i++) {
-        if (!renderedPages.has(i)) {
+        if (!isPageRendered(i)) {
             bgRenderQueue.push(i);
         }
     }
@@ -763,7 +426,7 @@ async function renderNextBg() {
 
     const pageNum = bgRenderQueue.shift();
 
-    if (!renderedPages.has(pageNum)) {
+    if (!isPageRendered(pageNum)) {
         await renderPageNow(pageNum);
     }
 
@@ -773,6 +436,10 @@ async function renderNextBg() {
 function cancelBgRender() {
     bgRenderQueue = [];
     bgRenderRunning = false;
+}
+
+function isPageRendered(pageNum) {
+    return renderedPages.has(pageNum);
 }
 
 async function renderPageNow(pageNum) {
@@ -912,7 +579,8 @@ async function performSearch(query) {
 
 function showSearchResults() {
     if (searchResults.length > 0) {
-        navBar.classList.add('active');
+        navGroup.classList.add('active');
+        navSep.style.display = '';
         matchCounter.textContent = `1 / ${searchResults.length}`;
         matchTotal.textContent = searchResults.length;
         matchInput.max = searchResults.length;
@@ -920,12 +588,15 @@ function showSearchResults() {
         renderAllHighlights();
         updateHeatmap();
         populateKeywordSelect();
+        updateSidebarBadge();
         goToMatch(0);
     } else {
-        navBar.classList.remove('active');
+        navGroup.classList.remove('active');
+        navSep.style.display = 'none';
         matchCounter.textContent = 'No matches';
         matchTotal.textContent = '0';
         matchInput.value = '';
+        updateSidebarBadge();
         updateHeatmap();
         populateKeywordSelect();
     }
@@ -939,7 +610,8 @@ function cycleSearch(query) {
         activeKeyword = query;
 
         if (searchResults.length > 0) {
-            navBar.classList.add('active');
+            navGroup.classList.add('active');
+            navSep.style.display = '';
             currentMatchIndex = (currentMatchIndex + 1) % searchResults.length;
             matchCounter.textContent = `${currentMatchIndex + 1} / ${searchResults.length}`;
             matchTotal.textContent = searchResults.length;
@@ -950,7 +622,8 @@ function cycleSearch(query) {
             populateKeywordSelect();
             goToMatch(currentMatchIndex);
         } else {
-            navBar.classList.remove('active');
+            navGroup.classList.remove('active');
+            navSep.style.display = 'none';
             matchCounter.textContent = 'No matches';
             matchTotal.textContent = '0';
             matchInput.value = '';
@@ -1016,11 +689,24 @@ keywordSelect.addEventListener('change', () => {
     }
 });
 
+function updateSidebarBadge() {
+    const badges = document.querySelectorAll('.badge');
+    badges.forEach(badge => {
+        const k = badge.dataset.keyword;
+        const total = searchCache[k] ? searchCache[k].length : 0;
+        if (k === activeKeyword && currentMatchIndex >= 0) {
+            badge.textContent = `${k}: ${currentMatchIndex + 1}/${total}`;
+        } else {
+            badge.textContent = `${k}: ${total}`;
+        }
+    });
+}
+
 // ========== ZOOM ==========
 
 function setZoom(newScale) {
     const oldScale = currentScale;
-    currentScale = Math.max(0.5, Math.min(2.5, newScale));
+    currentScale = Math.max(0.5, Math.min(4.0, newScale));
     updateZoomDisplay();
 
     viewer.style.transform = `scale(${currentScale})`;
@@ -1039,7 +725,7 @@ function zoomFit() {
     pdfDoc.getPage(1).then(page => {
         const viewport = page.getViewport({ scale: 1.0 });
         const containerWidth = viewerScroll.clientWidth - 32;
-        currentScale = Math.max(0.5, Math.min(2.5, containerWidth / viewport.width));
+        currentScale = Math.max(0.5, Math.min(4.0, containerWidth / viewport.width));
         updateZoomDisplay();
         viewer.style.transform = `scale(${currentScale})`;
         viewerScroll.scrollTop = 0;
@@ -1059,6 +745,11 @@ function updateZoomDisplay() {
     zoomLevelEl.textContent = Math.round(currentScale * 100) + '%';
 }
 
+function updatePageInfo() {
+    pageInput.value = currentPage;
+    pageInput.placeholder = totalPages > 0 ? currentPage : '0';
+}
+
 // ========== PAGE NAVIGATION ==========
 
 function prevPage() {
@@ -1076,14 +767,17 @@ function nextPage() {
 }
 
 function scrollToPage(pageNum) {
-    const el = document.getElementById('page-' + pageNum);
-    if (el) {
-        const targetTop = el.offsetTop * currentScale;
-        const behavior = smoothScrollEnabled ? 'smooth' : 'auto';
-        viewerScroll.scrollTo({ top: targetTop, behavior: behavior });
-        currentPage = pageNum;
-        updatePageInfo();
+    let targetOffset = 0;
+    for (let i = 1; i < pageNum; i++) {
+        targetOffset += (pageHeights[i] || 800) + 32;
     }
+    const targetTop = targetOffset * currentScale;
+    const behavior = smoothScrollEnabled && !isNavigating ? 'smooth' : 'auto';
+    isNavigating = true;
+    viewerScroll.scrollTo({ top: targetTop, behavior: behavior });
+    currentPage = pageNum;
+    updatePageInfo();
+    setTimeout(() => { isNavigating = false; }, 100);
 }
 
 function updatePageInfo() {
@@ -1109,6 +803,7 @@ pageInput.addEventListener('blur', () => {
 
 viewerScroll.addEventListener('scroll', () => {
     if (!viewer.children.length) return;
+    if (isNavigating) return;
 
     const scrollTop = viewerScroll.scrollTop / currentScale;
     const containerHeight = viewerScroll.clientHeight / currentScale;
@@ -1140,6 +835,7 @@ function goToMatch(index) {
     currentMatchIndex = ((index % searchResults.length) + searchResults.length) % searchResults.length;
     matchCounter.textContent = `${currentMatchIndex + 1} / ${searchResults.length}`;
     matchInput.value = currentMatchIndex + 1;
+    updateSidebarBadge();
 
     const result = searchResults[currentMatchIndex];
 
@@ -1178,7 +874,7 @@ async function startPrerender() {
     const pagesWithMatches = [...new Set(searchResults.map(r => r.page))];
 
     for (const pageNum of pagesWithMatches) {
-        if (!renderedPages.has(pageNum)) {
+        if (!isPageRendered(pageNum)) {
             await renderPageNow(pageNum);
         }
     }
@@ -1200,13 +896,15 @@ function clearSearch() {
     activeKeyword = '';
     searchResults = [];
     currentMatchIndex = -1;
-    navBar.classList.remove('active');
+    navGroup.classList.remove('active');
+    navSep.style.display = 'none';
     clearHighlights();
     updateHeatmap();
     keywordSelect.value = '';
     matchInput.value = '';
     matchTotal.textContent = '0';
     matchCounter.textContent = '0 / 0';
+    updateSidebarBadge();
 }
 
 // ========== HEATMAP ==========
@@ -1221,9 +919,8 @@ function updateHeatmap() {
     heatmapThumb.style.display = '';
 
     const toolbarHeight = document.querySelector('.viewer-toolbar').offsetHeight;
-    const navBarHeight = navBar.classList.contains('active') ? navBar.offsetHeight : 0;
     const containerHeight = document.querySelector('.viewer-container').offsetHeight;
-    const scrollableHeight = containerHeight - toolbarHeight - navBarHeight;
+    const scrollableHeight = containerHeight - toolbarHeight;
 
     if (scrollableHeight <= 0) return;
 
@@ -1257,6 +954,7 @@ function updateHeatmap() {
 
                 const bar = document.createElement('div');
                 bar.className = 'heatmap-bar' + (matchIndex === currentMatchIndex ? ' current-match' : '');
+
                 bar.style.top = barTop + 'px';
                 bar.style.height = barH + 'px';
 
@@ -1280,9 +978,8 @@ function scrollToHeatmapPosition(e) {
     if (!pdfDoc) return;
 
     const toolbarHeight = document.querySelector('.viewer-toolbar').offsetHeight;
-    const navBarHeight = navBar.classList.contains('active') ? navBar.offsetHeight : 0;
     const containerHeight = document.querySelector('.viewer-container').offsetHeight;
-    const scrollableHeight = containerHeight - toolbarHeight - navBarHeight;
+    const scrollableHeight = containerHeight - toolbarHeight;
 
     const rect = document.querySelector('.viewer-container').getBoundingClientRect();
     const clickY = e.clientY - rect.top;
@@ -1310,6 +1007,45 @@ document.addEventListener('mouseup', () => {
     heatmapDragging = false;
     document.body.style.cursor = '';
 });
+
+// ========== MOBILE (disabled) ==========
+
+function toggleMobileSidebar() { }
+function closeMobileSidebar() { }
+function closeMobileSidebar() {
+    sidebar.classList.remove('open');
+}
+function openMobileFilePicker() { }
+
+// ========== TOUCH ZOOM ==========
+
+let touchStartDist = 0;
+let touchStartScale = 1.0;
+
+function getTouchDist(e) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+viewerScroll.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+        touchStartDist = getTouchDist(e);
+        touchStartScale = currentScale;
+    }
+}, { passive: true });
+
+viewerScroll.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+        e.preventDefault();
+        const dist = getTouchDist(e);
+        const ratio = dist / touchStartDist;
+        const newScale = Math.max(0.5, Math.min(4.0, touchStartScale * ratio));
+        if (Math.abs(newScale - currentScale) > 0.01) {
+            setZoom(newScale);
+        }
+    }
+}, { passive: false });
 
 // ========== KEYBOARD SHORTCUTS ==========
 
@@ -1349,21 +1085,13 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         pageInput.blur();
         matchInput.blur();
+        closeMobileSidebar();
     }
 });
 
 // ========== DRAG & DROP ==========
 
-['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
-    sidebar.addEventListener(name, (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (name === 'dragover') sidebar.style.background = "#f0f7ff";
-        if (name === 'dragleave' || name === 'drop') sidebar.style.background = "white";
-    }, false);
-});
-
-sidebar.addEventListener('drop', async (e) => {
+async function handleDrop(e) {
     const entries = [];
     if (e.dataTransfer.items) {
         for (let i = 0; i < e.dataTransfer.items.length; i++) {
@@ -1380,8 +1108,32 @@ sidebar.addEventListener('drop', async (e) => {
             await traverseFileTree(entry, filesToProcess);
         }
     }
-    processFiles(filesToProcess);
+    if (filesToProcess.length > 0) {
+        processFiles(filesToProcess);
+    }
+}
+
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
+    sidebar.addEventListener(name, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (name === 'dragover') sidebar.style.background = "var(--grey-800)";
+    }, false);
 });
+
+sidebar.addEventListener('drop', handleDrop);
+
+const viewerContainer = document.querySelector('.viewer-container');
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
+    viewerContainer.addEventListener(name, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (name === 'dragover') viewerContainer.style.background = "var(--grey-700)";
+        if (name === 'dragleave' || name === 'drop') viewerContainer.style.background = "";
+    }, false);
+});
+
+viewerContainer.addEventListener('drop', handleDrop);
 
 async function traverseFileTree(item, fileList) {
     if (item.isFile && item.name.toLowerCase().endsWith('.pdf')) {
@@ -1449,6 +1201,136 @@ async function extractPdfsFromZip(zipFile) {
 
 // ========== KEYWORDS INIT ==========
 
+const keywordListSelect = document.getElementById('keywordListSelect');
+
+function populateListSelector() {
+    keywordListSelect.innerHTML = '';
+    for (const name of Object.keys(KEYWORD_LISTS)) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = `${name} (${KEYWORD_LISTS[name].length})`;
+        keywordListSelect.appendChild(opt);
+    }
+    const savedListName = localStorage.getItem('tender_keyword_list') || DEFAULT_LIST_NAME;
+    if (KEYWORD_LISTS[savedListName]) {
+        keywordListSelect.value = savedListName;
+    }
+}
+
+keywordListSelect.addEventListener('change', () => {
+    const listName = keywordListSelect.value;
+    if (switchKeywordList(listName)) {
+        searchCache = {};
+        clearSearch();
+        if (objectUrls.length > 0) {
+            rescanAllDocuments();
+        }
+    }
+});
+
+async function rescanAllDocuments() {
+    resultsArea.innerHTML = '<p class="scanning-msg">Rescanning documents...</p>';
+    progressBar.style.width = '0%';
+    
+    totalMatchesFound = 0;
+    totalDocsFound = 0;
+    let matchedInSession = 0;
+    
+    const combinedRegex = new RegExp(KEYWORDS.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'gi');
+    
+    for (let i = 0; i < objectUrls.length; i++) {
+        const url = objectUrls[i];
+        const cached = docTextCache[url];
+        
+        if (!cached) continue;
+        
+        const counts = {};
+        let fileTotalMatches = 0;
+        
+        for (let p = 0; p < cached.pages.length; p++) {
+            const text = cached.pages[p].text;
+            const matches = text.match(combinedRegex) || [];
+            matches.forEach(match => {
+                const lowerMatch = match.toLowerCase();
+                const originalKey = KEYWORDS.find(k => k.toLowerCase() === lowerMatch) || lowerMatch;
+                counts[originalKey] = (counts[originalKey] || 0) + 1;
+                fileTotalMatches++;
+            });
+        }
+        
+        const fileName = cached.fileName || `Document ${i + 1}`;
+        totalDocsFound++;
+        
+        if (fileTotalMatches > 0) {
+            renderCard(fileName, counts, url);
+            totalMatchesFound += fileTotalMatches;
+            matchedInSession++;
+        } else {
+            renderNoMatchCard(fileName, url);
+        }
+        
+        const pct = Math.round(((i + 1) / objectUrls.length) * 100);
+        progressBar.style.width = pct + '%';
+    }
+    
+    if (resultsArea.querySelector('.scanning-msg')) {
+        resultsArea.querySelector('.scanning-msg').remove();
+    }
+    
+    updateStats();
+    
+    const summary = document.createElement('p');
+    summary.className = 'status-msg';
+    summary.style.marginTop = '12px';
+    summary.style.color = 'var(--green-light)';
+    summary.textContent = `Done — ${matchedInSession} document${matchedInSession !== 1 ? 's' : ''} with matches`;
+    resultsArea.appendChild(summary);
+}
+
+async function rescanWithNewKeywords() {
+    if (!pdfDoc || !currentDocUrl) return;
+
+    const combinedRegex = new RegExp(KEYWORDS.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'gi');
+    let totalMatches = 0;
+    const docCounts = {};
+
+    for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        const cached = textPageCache[pageNum];
+        if (!cached) continue;
+        const matches = cached.text.match(combinedRegex) || [];
+        totalMatches += matches.length;
+        matches.forEach(m => {
+            const key = KEYWORDS.find(k => k.toLowerCase() === m.toLowerCase()) || m.toLowerCase();
+            docCounts[key] = (docCounts[key] || 0) + 1;
+        });
+    }
+
+    const activeCard = document.querySelector('.doc-card.active');
+    if (activeCard) {
+        const cardName = activeCard.querySelector('.doc-name').textContent;
+        activeCard.querySelector('.badge-grid').innerHTML = '';
+        KEYWORDS.forEach(k => {
+            const count = docCounts[k] || 0;
+            if (count > 0) {
+                const b = document.createElement('div');
+                b.className = 'badge';
+                b.textContent = `${k}: ${count}`;
+                b.onclick = (e) => {
+                    e.stopPropagation();
+                    cycleSearch(k);
+                };
+                activeCard.querySelector('.badge-grid').appendChild(b);
+            }
+        });
+    }
+
+    totalMatchesFound = totalMatches;
+    updateStats();
+    precomputeAllSearches();
+}
+
+populateListSelector();
+
 if (typeof saved === 'undefined' || !window.KEYWORDS) {
     const _saved = localStorage.getItem('tender_keywords');
     if (_saved) {
@@ -1457,6 +1339,3 @@ if (typeof saved === 'undefined' || !window.KEYWORDS) {
         } catch {}
     }
 }
-</script>
-</body>
-</html>

@@ -3,28 +3,71 @@
 const DEFAULT_LIST_NAME = "Geosynthetics";
 
 const DEFAULT_KEYWORD_LISTS = {
-    "Geosynthetics": [
+    "Central Supply-Only": [
+        // --- Geotextiles & Fabrics ---
         "geotextile", "Geotextile", "geo-textile", "geo textile", "geofabric", "geo fabric",
-        "TE-8", "TE-6", "TE-12", "geosynthetic", "geotex", "non woven", "non-woven", "nonwoven",
-        "Monofilament", "textile", "synthetic fibre fabric", "filter fabric", "ASTM D-4632", "ASTM D4632",
-        "Earth Grid", "geogrid", "geo grid", "bi axial", "bi-axial", "biaxial", "fiberglass grid",
-        "glasgrid", "swamp grid", "combigrid", "combi grid", "combi-grid", "Miragrid",
-        "geonet", "geocomposite", "Biplanar", "triplanar", "hydranet", "composite grid", "composite geo",
-        "geocell", "geo cell", "Geoweb", "Tough Cell", "stormwater system", "storm water system",
-        "Stormwater Storage", "StormTank", "soil cell", "baffle curtain", "concrete canvas",
-        "Geosynthetic Cementitious Composite Mat", "hi-40", "foamular 400", "rigid insulation",
-        "erosion control", "erosion control blanket", "ErosionControlBlanket", "ECB", "TE-SC32", "TE-C32",
-        "stenlog", "wattle", "sediment log", "ditch check", "bio-log", "silt fence", "TE100SF",
-        "silt curtain", "sediment control", "turbidity curtain", "W315", "safety boom",
+        "geotex", "non woven", "non-woven", "nonwoven", "Monofilament", "textile",
+        "synthetic fibre fabric", "filter fabric", "monofilament geotextile", "slit film",
+        "needle punched", "heat bonded", "paving fabric", "petromat", "TE-8", "TE-6", "TE-12",
+
+        // --- Geogrids & Soil Reinforcement ---
+        "geogrid", "geo grid", "Earth Grid", "bi axial", "bi-axial", "biaxial", "triaxial grid",
+        "fiberglass grid", "glasgrid", "swamp grid", "Miragrid", "triplanar", "composite grid",
+        "composite geo", "strata grid", "TX160", "TX140", "geosynthetic reinforcement",
+        "basal reinforcement", "combigrid", "combi grid", "combi-grid",
+
+        // --- Liners & Containment ---
+        "geomembrane", "geo membrane", "membrane", "EPDM liner", "EPDM membrane", "PVC liner",
+        "LLDPE liner", "HDPE liner", "RPE liner", "40mil LLDPE", "40mil HDPE", "60mil HDPE",
+        "HAZGARD", "XR-5", "XR-3", "GEOFLEX", "secondary containment", "concrete protective liner",
+        "Studliner", "Sure-Grip", "Sure Grip", "concrete liner", "CONCRETE LINING SYSTEM",
+        "Liner sheet", "ultra grip", "HDPE pipe liner", "ClosureTurf", "BGM", "GCL",
+        "BentoGard", "bentonite", "bentoliner", "geosynthetic clay liner", "bentofix",
+        "bentomat", "radon", "radon barrier", "vapor barrier", "moisture barrier",
+        "stego wrap", "permaseal",
+
+        // --- Drainage & Filtration ---
+        "geonet", "geocomposite", "Biplanar", "hydranet", "drainboard", "drainage board",
+        "sheet drain", "strip drain", "wick drain", "multiflow", "multi-flow", "multi flow",
+        "drain tile", "subdrain", "weeping tile", "drainage tile", "perforated HDPE",
+        "HDPE drain pipe", "frenchdrain", "french drain", "high density polyethylene",
+        "diameter HDPE", "dual wall", "culvert", "corrugated steel", "CSP", "nyloplast",
+        "geopipe", "smooth wall HDPE", "perforated pipe", "advanedge",
+
+        // --- Erosion & Sediment Control ---
+        "erosion control", "erosion control blanket", "ErosionControlBlanket", "ECB",
+        "TE-SC32", "TE-C32", "stenlog", "wattle", "sediment log", "ditch check", "bio-log",
+        "silt fence", "TE100SF", "silt curtain", "sediment control", "turbidity curtain",
+        "W315", "safety boom", "coir log", "coconut fiber", "straw wattle", "excelsior blanket",
+        "curlex", "north american green", "NAG", "hydroseeding", "bonded fiber matrix", "BFM",
+
+        // --- Hard Armor & Shoreline Protection ---
         "cable concrete", "shoreflex", "flexamat", "Concrete Matting", "articulated concrete",
         "articulating concrete", "TRM", "turf reinforcement", "turf-reinforcement", "pyramat",
-        "landlok", "Armormax", "Fabrinet", "drain tile", "subdrain", "weeping tile", "drainage tile",
-        "perforated HDPE", "HDPE drain pipe", "frenchdrain", "french drain", "high density polyethylene",
-        "diameter HDPE", "dual wall", "culvert", "corrugated steel", "CSP", "nyloplast", "gabions",
-        "MSE Wall", "stabilized earth", "reinforced soil", "multiflow", "multi-flow", "multi flow",
-        "coffer dam", "cofferdam", "Aquadam", "Dewatering Bag", "Silt Bag", "Geotube", "desludging",
-        "detectable warning tile", "warning tile", "detectable tile", "detectable warning systems",
-        "ADA tile", "armor-tile", "armortile", "armor tile", "radon", "radon barrier"
+        "landlok", "Armormax", "Fabrinet", "concrete canvas", "Geosynthetic Cementitious Composite Mat",
+        "revetment", "rip rap alternative", "articulating concrete block", "ACB", "scour protection",
+
+        // --- Stormwater & Cellular Confinement ---
+        "geocell", "geo cell", "Geoweb", "Tough Cell", "stormwater system", "storm water system",
+        "Stormwater Storage", "StormTank", "soil cell", "aquacell", "r-tank", "eco-rain",
+        "permeable pavers", "porous pavement", "baffle curtain",
+
+        // --- Environmental & Dewatering ---
+        "coffer dam", "cofferdam", "Aquadam", "Dewatering Bag", "Silt Bag", "Geotube",
+        "desludging", "sandbag", "bulk bag", "super sack", "drip pad", "containment berm",
+
+        // --- Walls & Construction Materials ---
+        "MSE Wall", "stabilized earth", "reinforced soil", "gabions", "hi-40",
+        "foamular 400", "rigid insulation", "detectable warning tile", "warning tile",
+        "detectable tile", "detectable warning systems", "ADA tile", "armor-tile",
+        "armortile", "armor tile",
+
+        // --- Companies & Manufacturers ---
+        "titan enviro", "titan environmental", "mirafi", "tencate", "layfield", "solmax",
+        "Propex", "tensar", "NAUE", "armtec", "terrafix", "nilex", "Coletanche", "agru america",
+
+        // --- Testing & Technical Standards ---
+        "ASTM D-4632", "ASTM D4632", "ASTM D4491", "ASTM D4751", "ASTM D4533", "ASTM D4833"
     ],
     "Liners": [
         "geomembrane", "geo membrane", "membrane", "EPDM liner", "PVC liner", "LLDPE liner",

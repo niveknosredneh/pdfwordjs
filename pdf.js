@@ -426,15 +426,91 @@ async function renderPageNow(pageNum, forceScale = null) {
 // ========== SEARCH ==========
 
 async function precomputeAllSearches() {
-    for (const keyword of KEYWORDS) {
-        if (searchCache[keyword] !== undefined) continue;
-        await computeSearchForQuery(keyword);
+    if (searchCache._deduplicated) return;
+    
+    const combinedRegex = new RegExp(KEYWORDS.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'gi');
+    
+    for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        const cached = textPageCache[pageNum];
+        if (!cached) continue;
+
+        const pageText = cached.text;
+        const viewport = cached.viewport;
+
+        if (!cached.items) {
+            await fetchPageItems(pageNum);
+        }
+        const textItems = cached.items;
+        if (!textItems) continue;
+
+        let match;
+        while ((match = combinedRegex.exec(pageText)) !== null) {
+            const lower = match[0].toLowerCase();
+            const canonical = KEYWORDS.find(k => k.toLowerCase() === lower) || lower;
+            
+            if (searchCache[canonical] === undefined) {
+                searchCache[canonical] = [];
+            }
+
+            const matchStart = match.index;
+            const matchEnd   = match.index + match[0].length;
+
+            let charOffset = 0;
+            let startItem = null, endItem = null;
+            let startItemCharStart = 0, endItemCharStart = 0;
+
+            for (const item of textItems) {
+                const itemStart = charOffset;
+                const itemEnd   = charOffset + item.text.length;
+
+                if (!startItem && matchStart >= itemStart && matchStart < itemEnd) {
+                    startItem = item;
+                    startItemCharStart = itemStart;
+                }
+
+                if (startItem && matchEnd > itemStart && matchEnd <= itemEnd) {
+                    endItem = item;
+                    endItemCharStart = itemStart;
+                    break;
+                }
+
+                charOffset = itemEnd;
+            }
+
+            if (startItem) {
+                const startCharFrac = startItem.text.length > 0
+                    ? (matchStart - startItemCharStart) / startItem.text.length : 0;
+                const sx = startItem.transform[4] + startCharFrac * startItem.width;
+
+                const sy = viewport.height - (startItem.transform[5] + startItem.height);
+
+                const ei = endItem || startItem;
+                const eiCharStart = endItem ? endItemCharStart : startItemCharStart;
+                const endCharFrac = ei.text.length > 0
+                    ? (matchEnd - eiCharStart) / ei.text.length : 1;
+                const endX = ei.transform[4] + endCharFrac * ei.width;
+
+                searchCache[canonical].push({
+                    page: pageNum,
+                    x: sx,
+                    y: sy,
+                    width: Math.max(endX - sx, 4),
+                    height: startItem.height
+                });
+            }
+        }
     }
+    
+    searchCache._deduplicated = true;
     populateKeywordSelect();
 }
 
 async function computeSearchForQuery(query) {
     if (searchCache[query] !== undefined) return;
+
+    if (searchCache._deduplicated) {
+        return;
+    }
 
     const source = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const localRegex = new RegExp(source, 'gi');
@@ -531,21 +607,30 @@ async function fetchPageItems(pageNum) {
 async function performSearch(query) {
     if (!pdfDoc || !query) return;
 
-    if (searchCache[query] !== undefined) {
-        searchResults = searchCache[query];
-        activeKeyword = query;
+    let canonicalQuery = query;
+    if (searchCache[query] === undefined) {
+        const lower = query.toLowerCase();
+        const found = KEYWORDS.find(k => k.toLowerCase() === lower);
+        if (found && searchCache[found] !== undefined) {
+            canonicalQuery = found;
+        }
+    }
+
+    if (searchCache[canonicalQuery] !== undefined) {
+        searchResults = searchCache[canonicalQuery];
+        activeKeyword = canonicalQuery;
         currentMatchIndex = 0;
         showSearchResults();
         return;
     }
 
-    activeKeyword = query;
+    activeKeyword = canonicalQuery;
     currentMatchIndex = 0;
     clearHighlights();
     searchResults = [];
 
-    await computeSearchForQuery(query);
-    searchResults = searchCache[query] || [];
+    await computeSearchForQuery(canonicalQuery);
+    searchResults = searchCache[canonicalQuery] || [];
 
     showSearchResults();
 }
@@ -1001,8 +1086,8 @@ function updateHeatmap() {
     const toolbarHeight = document.querySelector('.viewer-toolbar').offsetHeight;
     const containerHeight = document.querySelector('.viewer-container').offsetHeight;
     const scrollableHeight = containerHeight - toolbarHeight;
-    const heatmapTopOffset = 15;
-    const heatmapBottomOffset = 25;
+    const heatmapTopOffset = -5;
+    const heatmapBottomOffset = 45;
     const heatmapHeight = scrollableHeight - heatmapTopOffset - heatmapBottomOffset;
 
     if (scrollableHeight <= 0) return;
@@ -1402,23 +1487,9 @@ async function extractPdfsFromZip(zipFile) {
 
 const keywordListSelect = document.getElementById('keywordListSelect');
 
-function populateListSelector() {
-    keywordListSelect.innerHTML = '';
-    for (const name of Object.keys(KEYWORD_LISTS)) {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = `${name} (${KEYWORD_LISTS[name].length})`;
-        keywordListSelect.appendChild(opt);
-    }
-    const savedListName = localStorage.getItem('tender_keyword_list') || DEFAULT_LIST_NAME;
-    if (KEYWORD_LISTS[savedListName]) {
-        keywordListSelect.value = savedListName;
-    }
-}
-
 keywordListSelect.addEventListener('change', () => {
     const listName = keywordListSelect.value;
-    if (switchKeywordList(listName)) {
+    if (window.switchKeywordList && window.switchKeywordList(listName)) {
         searchCache = {};
         clearSearch();
         if (objectUrls.length > 0) {
@@ -1528,16 +1599,12 @@ async function rescanWithNewKeywords() {
     precomputeAllSearches();
 }
 
-populateListSelector();
-
-if (typeof saved === 'undefined' || !window.KEYWORDS) {
-    const _saved = localStorage.getItem('tender_keywords');
-    if (_saved) {
-        try {
-            window.KEYWORDS = JSON.parse(_saved);
-        } catch {}
+document.addEventListener('DOMContentLoaded', async () => {
+    if (typeof loadKeywords === 'function') {
+        await loadKeywords();
     }
-}
+    populateListSelector();
+});
 
 /**
  * UI Bridge: Toggles the Keyword Management Modal

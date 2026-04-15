@@ -40,7 +40,7 @@
     </div>
 
 
-    <p style="font-size:0.85rem;padding:0px 0px; gap:0px;bottom:0;position: absolute; margin: 0; backdrop-filter: blur(10px);"> Testing Branch v0.65 - <a href="https://niveknosredneh.github.io/projects/pdf/"> Visit Stable branch </a>
+    <p style="font-size:0.85rem;padding:0px 0px; gap:0px;bottom:0;position: absolute; margin: 0; backdrop-filter: blur(10px);">
     <br>Kevin Henderson - <b>13/04/2026</b></p>
 </div>
 
@@ -97,8 +97,14 @@
         <p class="list-info" id="listInfo"></p>
         <textarea id="keywordInput"></textarea>
         <div class="modal-footer">
-            <button onclick="toggleKeywordManager()" class="btn-action" style="flex:none; width:100px;">Cancel</button>
-            <button onclick="saveCurrentList()" class="btn-action" style="flex:none; width:120px; background:var(--green); color:white; border:none;">Save & Apply</button>
+            <div style="display:flex;gap:8px;">
+                <button onclick="exportKeywords()" class="btn-action" style="flex:none; width:80px;">Export</button>
+                <button onclick="importKeywords()" class="btn-action" style="flex:none; width:80px;">Import</button>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button onclick="toggleKeywordManager()" class="btn-action" style="flex:none; width:80px;">Cancel</button>
+                <button onclick="saveCurrentList()" class="btn-action" style="flex:none; width:100px; background:var(--green); color:white; border:none;">Save & Apply</button>
+            </div>
         </div>
     </div>
 </div>

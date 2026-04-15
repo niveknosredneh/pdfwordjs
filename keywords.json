@@ -4,7 +4,7 @@
         "Central Supply-Only": [
             "geotextile", "Geotextile", "geo-textile", "geo textile", "geofabric", "geo fabric",
             "geotex", "non woven", "non-woven", "nonwoven", "Monofilament", "textile",
-            "synthetic fibre fabric", "filter fabric", "monofilament geotextile", "slit film",
+            "synthetic fibre fabric", "filter fabric", "landscape fabric", "monofilament geotextile", "slit film",
             "needle punched", "heat bonded", "paving fabric", "petromat", "TE-8", "TE-6", "TE-12",
             "geogrid", "geo grid", "Earth Grid", "gladiator grid", "bi axial", "bi-axial", "biaxial", "triaxial grid",
             "fiberglass grid", "glasgrid", "swamp grid", "Miragrid", "triplanar", "composite grid",
@@ -23,8 +23,7 @@
             "drain tile", "subdrain", "weeping tile", "drainage tile", "perforated HDPE",
             "HDPE drain pipe", "frenchdrain", "french drain", "high density polyethylene",
             "diameter HDPE", "dual wall", "culvert", "corrugated steel", "CSP", "nyloplast",
-            "geopipe", "smooth wall HDPE", "perforated pipe", "advanedge",
-            "erosion control", "erosion control blanket", "ErosionControlBlanket", "ECB",
+            "geopipe", "perforated pipe", "erosion control", "erosion control blanket", "ErosionControlBlanket", "ECB",
             "TE-SC32", "TE-C32", "stenlog", "wattle", "sediment log", "ditch check", "bio-log",
             "silt fence", "TE100SF", "silt curtain", "sediment control", "turbidity curtain",
             "W315", "safety boom", "coir log", "stenlog", "straw wattle", "excelsior blanket",
@@ -44,17 +43,38 @@
             "titan enviro", "titan environmental", "mirafi", "tencate", "layfield", "solmax",
             "Propex", "tensar", "NAUE", "armtec", "terrafix", "nilex", "Coletanche", "agru america"
         ],
-        "Liners": [
-            "geomembrane", "geo membrane", "membrane", "EPDM liner", "PVC liner", "LLDPE liner",
-            "HDPE liner", "RPE liner", "40mil LLDPE", "40mil HDPE", "60mil HDPE", "HAZGARD",
-            "XR-5", "XR-3", "GEOFLEX", "secondary containment", "concrete protective liner",
-            "Studliner", "Sure-Grip", "Sure Grip", "concrete liner", "CONCRETE LINING SYSTEM",
-            "Liner sheet", "ultra grip", "HDPE pipe liner", "ClosureTurf", "BGM", "GCL",
-            "BentoGard", "bentonite", "bentoliner", "geosynthetic clay liner"
+        "Western Supply-Only": [
+
         ],
-        "Companies": [
-            "titan enviro", "titan environmental", "mirafi", "tencate", "layfield", "solmax",
-            "Propex", "tensar", "NAUE", "armtec", "terrafix", "nilex", "Coletanche", "agru america"
+
+        "Eastern Supply-Only": [
+
+        ],
+
+        "SWM - Stormwater": [
+	"stormwater system", "storm water system",
+            "Stormwater Storage", "StormTank", "soil cell",
+
+        ],
+
+        "Construction - Geomembrane": [
+
+        ],
+
+        "MSE - Walls": [
+		"MSE Wall", "stabilized earth", "reinforced soil", "gabions"
+        ],
+
+        "CPL - Concrete Protection": [
+	"concrete protective liner",
+            "Studliner", "Sure-Grip", "Sure Grip", "concrete liner", "CONCRETE LINING SYSTEM",
+            "Liner sheet", "ultra grip", "HDPE pipe liner"
+
+        ],
+
+        "Business Development": [
+            "nilex"
         ]
+
     }
 }

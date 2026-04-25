@@ -6,6 +6,7 @@ window.smoothScrollEnabled = false;
 window.mobileSidebarOpen = false;
 window.settingsOpen = false;
 window.settingsJustToggled = false;
+window.docDataCache = {};
 
 // ========== DOM REFS ==========
 
@@ -1252,6 +1253,11 @@ window.setupEventListeners = function() {
             if (name === 'dragover') viewerContainer.style.background = "var(--grey-700)";
             if (name === 'dragleave' || name === 'drop') viewerContainer.style.background = "";
         }, false);
+    });
+    
+    viewerContainer.addEventListener('drop', (e) => {
+        console.log('viewerContainer drop event');
+        window.handleDrop(e);
     });
 
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {

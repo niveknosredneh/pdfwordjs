@@ -28,6 +28,7 @@ async function loadKeywords() {
     
     window.KEYWORD_LISTS = KEYWORD_LISTS;
     window.DEFAULT_LIST_NAME = DEFAULT_LIST_NAME;
+    window.currentListName = currentListName;
     window.isCustomList = isCustomList;
     window.createList = createList;
     window.updateList = updateList;
@@ -118,55 +119,68 @@ function resetKeywords() {
 }
 
 function populateListSelector() {
+    const keywordLists = window.KEYWORD_LISTS || KEYWORD_LISTS;
+    console.log('populateListSelector running', { keywordLists });
+    
     const listSelector = document.getElementById('keywordListSelect');
-    if (listSelector) {
+    console.log('sidebar dropdown', { listSelector: !!listSelector });
+    if (listSelector && keywordLists) {
         listSelector.innerHTML = '';
-        for (const name of Object.keys(KEYWORD_LISTS)) {
+        for (const name of Object.keys(keywordLists)) {
             const opt = document.createElement('option');
             opt.value = name;
-            opt.textContent = `${name} (${KEYWORD_LISTS[name].length})`;
+            opt.textContent = `${name} (${keywordLists[name].length})`;
             listSelector.appendChild(opt);
         }
         const savedListName = localStorage.getItem('tender_keyword_list') || DEFAULT_LIST_NAME;
-        if (KEYWORD_LISTS[savedListName]) {
+        if (keywordLists[savedListName]) {
             listSelector.value = savedListName;
         }
     }
     
     const modalSelector = document.getElementById('listSelector');
-    if (modalSelector) {
+    console.log('modal dropdown', { modalSelector: !!modalSelector });
+    if (modalSelector && keywordLists) {
         modalSelector.innerHTML = '';
-        for (const name of Object.keys(KEYWORD_LISTS)) {
+        for (const name of Object.keys(keywordLists)) {
             const opt = document.createElement('option');
             opt.value = name;
-            opt.textContent = `${name} (${KEYWORD_LISTS[name].length})`;
+            opt.textContent = `${name} (${keywordLists[name].length})`;
             modalSelector.appendChild(opt);
+            console.log('added option', name);
         }
-        if (KEYWORD_LISTS[currentListName]) {
+        if (keywordLists[currentListName]) {
             modalSelector.value = currentListName;
         }
     } else {
-        console.log('modalSelector (listSelector) not found in DOM');
+        console.log('modalSelector not found in DOM');
     }
 }
 
 function loadListIntoEditor() {
     const listSelector = document.getElementById('listSelector');
-    const listName = listSelector ? listSelector.value : currentListName;
-    const textarea = document.getElementById('keywordInput');
-    const deleteBtn = document.getElementById('deleteListBtn');
-    const listInfo = document.getElementById('listInfo');
+    let listName = listSelector ? listSelector.value : window.currentListName;
+    
+    // If listName is empty, use default
+    if (!listName && window.KEYWORDS && window.DEFAULT_LIST_NAME) {
+        listName = window.DEFAULT_LIST_NAME;
+    }
+    
+    console.log('loadListIntoEditor called', { listName, KEYWORD_LISTSKeys: Object.keys(KEYWORD_LISTS) });
     
     const keywords = KEYWORD_LISTS[listName] || [];
+    const textarea = document.getElementById('keywordInput');
     textarea.value = keywords.join('\n');
     
+    const deleteBtn = document.getElementById('deleteListBtn');
     if (deleteBtn) {
         deleteBtn.style.display = isCustomList(listName) ? '' : 'none';
     }
+    const listInfo = document.getElementById('listInfo');
     if (listInfo) {
         listInfo.textContent = `${keywords.length} keywords`;
     }
-    if (listSelector) {
+    if (listSelector && listName) {
         listSelector.value = listName;
     }
 }

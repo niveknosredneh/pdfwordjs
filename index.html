@@ -4,8 +4,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mammoth@1.11.0/mammoth.browser.min.js"></script>
-    <!-- <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="ocr.js"></script> -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=no">
     <title>PDF Scanner</title>
@@ -54,7 +52,7 @@
 
 
     <div class="attribution">
-        Kevin Henderson - <b>19/04/2026 - </b>
+        Kevin Henderson - <b>24/04/2026 - </b>
         <a href="https://github.com/kvnhndrsn/kwpdf">kwpdf</a>
     </div>
 </div>
@@ -104,14 +102,14 @@
 
 <div id="keywordManager">
     <div class="modal">
-        <h3>Manage Keywords</h3>
+        <h3 style="color: #f5f5f5;">Manage Keywords</h3>
         <div class="keyword-list-header">
             <select id="listSelector" onchange="loadListIntoEditor()"></select>
             <button onclick="showNewListDialog()" class="btn-action" style="flex:none; width:80px;">+ New</button>
             <button onclick="deleteCurrentList()" id="deleteListBtn" class="btn-action" style="flex:none; width:80px; background:#c0392b;">Delete</button>
         </div>
-        <p class="list-info" id="listInfo"></p>
-        <textarea id="keywordInput"></textarea>
+        <p class="list-info" id="listInfo" style="color: #d4d4d4;"></p>
+        <textarea id="keywordInput" style="width: 360px; height: 247px;"></textarea>
         <div class="modal-footer">
             <div style="display:flex;gap:8px;">
                 <button onclick="exportKeywords()" class="btn-action" style="flex:none; width:80px;">Export</button>
@@ -137,6 +135,7 @@
 </div>
 
 <script src="ui.js"></script>
+    <script src="file_handler.js"></script>
     <script src="pdf.js"></script>
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';

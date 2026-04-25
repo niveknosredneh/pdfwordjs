@@ -310,7 +310,7 @@ body {
 }
 
 .tree-arrow {
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     color: var(--grey-400);
     width: 18px;
     height: 18px;
@@ -385,7 +385,7 @@ body {
 }
 
 .tree-child-kw {
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     color: var(--grey-400);
 }
 
@@ -498,7 +498,7 @@ body {
     color: white;
     padding: 3px 4px;
     border-radius: 4px;
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     cursor: pointer;
     max-width: 100px;
 }
@@ -637,7 +637,7 @@ body {
 
 .toggle-container {
     color: var(--grey-400);
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     display: flex;
     justify-content: space-between;
     margin-left: 8px;
@@ -735,24 +735,16 @@ body {
     display: flex !important;
 }
 
+#keywordManager .modal {
+    background: var(--grey-800);
+    padding: 24px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 450px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+}
 
-.modal {
-    background: var(--grey-800); padding: 24px; border-radius: 12px; width: 450px; max-height: 85%;
-    display: flex; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-}
-.modal h3 { margin-top: 0; color: var(--grey-200); }
-#keywordInput {
-    flex: 1; min-height: 350px; padding: 12px; font-family: monospace;
-    border: 1px solid var(--grey-600); border-radius: 6px; font-size: 0.9rem; resize: none;
-    background: var(--grey-900); color: var(--grey-300);
-}
-.modal-footer { margin-top: 20px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-.keyword-list-header { display: flex; gap: 8px; margin-bottom: 12px; }
-.keyword-list-header select { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid var(--grey-600); background: var(--grey-900); color: var(--grey-300); font-size: 0.9rem; }
-.list-info { font-size: 0.8rem; color: var(--grey-500); margin: 0 0 12px 0; }
-.list-info .star { color: #f1c40f; }
-#deleteListBtn:disabled { opacity: 0.4; cursor: not-allowed; }
-#newListDialog { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+#newListDialog { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10003; align-items: center; justify-content: center; }
 #newListDialog.show { display: flex; }
 #newListDialog .modal { background: var(--grey-800); padding: 24px; border-radius: 12px; width: 350px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
 #newListDialog input { width: 100%; padding: 10px; margin: 12px 0; border-radius: 6px; border: 1px solid var(--grey-600); background: var(--grey-900); color: var(--grey-300); box-sizing: border-box; }
@@ -878,7 +870,12 @@ body {
 }
 
 #keywordInput {
-    min-height: 200px;
+    min-height: 250px;
+    height: 300px;
+    width: 100%;
+    font-family: monospace;
+    font-size: 0.85rem;
+    resize: vertical;
 }
 
 .keyword-list-header {
@@ -886,10 +883,12 @@ body {
 }
 
 .list-info {
-    font-size: 0.75rem;
+    color: var(--grey-300);
+    font-size: 0.85rem;
 }
 
 .modal h3 {
+    color: var(--grey-200);
     font-size: 1rem;
 }
 
@@ -990,7 +989,12 @@ body {
 }
 
 #keywordInput {
-    min-height: 200px;
+    min-height: 250px;
+    height: 300px;
+    width: 100%;
+    font-family: monospace;
+    font-size: 0.85rem;
+    resize: vertical;
 }
 
 .keyword-list-header {
@@ -998,10 +1002,12 @@ body {
 }
 
 .list-info {
-    font-size: 0.75rem;
+    color: var(--grey-300);
+    font-size: 0.85rem;
 }
 
 .modal h3 {
+    color: var(--grey-200);
     font-size: 1rem;
 }
 

@@ -19,56 +19,43 @@ function getFileIcon(filename) {
     return '<svg width="16" height="16" viewBox="0 0 24 24" fill="#757575"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/></svg>';
 }
 
-const OCR = {
-    enabled: false,
-    init: async () => {},
-    extractText: async () => null
-};
+window.cachedKeywordRegex = null;
+window.cachedKeywordList = null;
 
-let cachedKeywordRegex = null;
-let cachedKeywordList = null;
-
-function getKeywordRegex(keywords) {
+window.getKeywordRegex = function(keywords) {
     if (!keywords) keywords = window.KEYWORDS || [];
     if (!Array.isArray(keywords)) keywords = [];
     
     const keywordsJson = JSON.stringify(keywords);
     
-    if (cachedKeywordRegex && cachedKeywordList === keywordsJson) {
-        return cachedKeywordRegex;
+    if (window.cachedKeywordRegex && window.cachedKeywordList === keywordsJson) {
+        return window.cachedKeywordRegex;
     }
     
     if (keywords.length === 0) {
-        cachedKeywordRegex = null;
-        cachedKeywordList = keywordsJson;
-        return cachedKeywordRegex;
+        window.cachedKeywordRegex = null;
+        window.cachedKeywordList = keywordsJson;
+        return window.cachedKeywordRegex;
     }
     
     const pattern = keywords
         .map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
         .join('|');
     
-    cachedKeywordRegex = new RegExp(`\\b(${pattern})\\b`, 'gi');
-    cachedKeywordList = keywordsJson;
-    return cachedKeywordRegex;
-}
+    window.cachedKeywordRegex = new RegExp(`\\b(${pattern})\\b`, 'gi');
+    window.cachedKeywordList = keywordsJson;
+    return window.cachedKeywordRegex;
+};
 
-function clearKeywordRegexCache() {
-    cachedKeywordRegex = null;
-    cachedKeywordList = null;
-}
+window.clearKeywordRegexCache = function() {
+    window.cachedKeywordRegex = null;
+    window.cachedKeywordList = null;
+};
 
 // ========== STATE ==========
 
-let objectUrls = [];
 window.activeKeyword = "";
-window.totalMatchesFound = 0;
-window.totalDocsFound = 0;
-window.processed = 0;
-window.totalFiles = 0;
-
 window.currentDocType = 'pdf';
-let docContentCache = {};
 
 window.pdfDoc = null;
 window.currentDocUrl = "";
@@ -85,26 +72,14 @@ window.renderedPages = new Set();
 window.renderedScales = {};
 window.zoomRenderTask = null;
 window.textPageCache = {};
-let docTextCache = {};
 
 window.isNavigating = false;
-let ocrScanning = false;
-
-window.bgRenderRunning = false;
-window.bgRenderQueue = [];
-window.pageObserver = null;
-window.renderPageDebounce = null;
 
 // ========== DOCX STATE ==========
 
 let docSearchResults = [];
 let docCurrentMatchIndex = -1;
 let docOriginalHtml = null;
-
-// ========== DATA CACHE ==========
-
-window.docDataCache = {};
-let basePath = '';
 
 // ========== PDF LOADING ==========
 
@@ -124,7 +99,7 @@ function loadPDF(fileUrl, keyword = "") {
     }
     
     window.currentDocUrl = fileUrl;
-    cancelBgRender();
+    window.cancelBgRender();
 
     if (window.pdfDoc) {
         try {
@@ -163,7 +138,7 @@ function loadPDF(fileUrl, keyword = "") {
             window.loaderStatus.textContent = 'Extracting text content...';
             window.loaderProgressFill.style.width = '60%';
 
-            const cached = docTextCache[fileUrl];
+            const cached = window.docTextCache[fileUrl];
             if (cached) {
                 for (let i = 0; i < cached.pages.length; i++) {
                     window.textPageCache[i + 1] = cached.pages[i];
@@ -206,8 +181,8 @@ function getDocTypeFromUrl(url) {
     if (dataCached?.name) {
         return getFileType(dataCached.name);
     }
-    if (docContentCache[url]?.type) {
-        return docContentCache[url].type;
+    if (window.docContentCache[url]?.type) {
+        return window.docContentCache[url].type;
     }
     if (url.includes('.pdf')) return 'pdf';
     if (url.includes('.docx')) return 'docx';
@@ -227,16 +202,16 @@ function loadDocument(fileUrl, keyword = "") {
 }
 
 function loadDocxDoc(fileUrl, keyword = "") {
-    if (window.currentDocUrl === fileUrl && docContentCache[fileUrl]) {
+    if (window.currentDocUrl === fileUrl && window.docContentCache[fileUrl]) {
         if (keyword) {
             window.cycleDocSearch(keyword);
         }
         return;
     }
 
-    cancelBgRender();
+    window.cancelBgRender();
     window.currentDocUrl = fileUrl;
-    const cachedInfo = docContentCache[fileUrl];
+    const cachedInfo = window.docContentCache[fileUrl];
     window.currentDocType = cachedInfo?.type || getDocTypeFromUrl(fileUrl);
 
     window.loader.style.display = 'flex';
@@ -249,7 +224,7 @@ function loadDocxDoc(fileUrl, keyword = "") {
 
     (async () => {
         try {
-            const cached = docContentCache[fileUrl];
+            const cached = window.docContentCache[fileUrl];
             if (!cached) throw new Error('Document not found in cache');
 
             window.loaderProgressFill.style.width = '70%';
@@ -322,10 +297,10 @@ function renderDocContent(html, plainText) {
 // ========== DOC SEARCH ==========
 
 async function startDocSearchComputation() {
-    const cached = docContentCache[window.currentDocUrl];
+    const cached = window.docContentCache[window.currentDocUrl];
     if (!cached) return;
 
-    const combinedRegex = getKeywordRegex(window.KEYWORDS);
+    const combinedRegex = window.getKeywordRegex(window.KEYWORDS);
     const text = cached.text;
     const results = [];
     let match;
@@ -353,9 +328,9 @@ async function startDocSearchComputation() {
 }
 
 window.performDocSearch = async function(query) {
-    if (!window.currentDocUrl || !docContentCache[window.currentDocUrl]) return;
+    if (!window.currentDocUrl || !window.docContentCache[window.currentDocUrl]) return;
 
-    const cached = docContentCache[window.currentDocUrl];
+    const cached = window.docContentCache[window.currentDocUrl];
     const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const localRegex = new RegExp(`\\b${escaped}\\b`, 'gi');
     const text = cached.text;
@@ -391,9 +366,9 @@ window.performDocSearch = async function(query) {
 };
 
 window.cycleDocSearch = function(query) {
-    if (!window.currentDocUrl || !docContentCache[window.currentDocUrl]) return;
+    if (!window.currentDocUrl || !window.docContentCache[window.currentDocUrl]) return;
 
-    const cached = docContentCache[window.currentDocUrl];
+    const cached = window.docContentCache[window.currentDocUrl];
     const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const localRegex = new RegExp(`\\b${escaped}\\b`, 'gi');
     const text = cached.text;
@@ -410,13 +385,13 @@ window.cycleDocSearch = function(query) {
 
     if (results.length === 0) return;
 
-    const wasSameQuery = (docSearchResults.length > 0 && docContentCache[window.currentDocUrl]?.lastQuery === query);
+    const wasSameQuery = (docSearchResults.length > 0 && window.docContentCache[window.currentDocUrl]?.lastQuery === query);
     if (!wasSameQuery) {
         docCurrentMatchIndex = 0;
     } else {
         docCurrentMatchIndex = (docCurrentMatchIndex + 1) % results.length;
     }
-    docContentCache[window.currentDocUrl].lastQuery = query;
+    window.docContentCache[window.currentDocUrl].lastQuery = query;
 
     docSearchResults = results;
 
@@ -440,7 +415,7 @@ function renderDocHighlights() {
     const currentResult = docSearchResults[docCurrentMatchIndex];
     if (!currentResult) return;
 
-    const plainText = docContentCache[window.currentDocUrl]?.text || '';
+    const plainText = window.docContentCache[window.currentDocUrl]?.text || '';
     const matchText = plainText.substring(currentResult.index, currentResult.index + currentResult.length);
     const escapedMatch = matchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const searchRegex = new RegExp(escapedMatch, 'gi');
@@ -478,7 +453,7 @@ function goToDocMatch(index) {
     window.updateSidebarBadge();
 
     const result = docSearchResults[docCurrentMatchIndex];
-    const plainText = docContentCache[window.currentDocUrl]?.text || '';
+    const plainText = window.docContentCache[window.currentDocUrl]?.text || '';
     const textLen = plainText.length;
     const targetFraction = result.index / textLen;
     const scrollHeight = window.viewerScroll.scrollHeight - window.viewerScroll.clientHeight;
@@ -598,10 +573,10 @@ async function renderNextBg() {
     requestAnimationFrame(renderNextBg);
 }
 
-function cancelBgRender() {
+window.cancelBgRender = function() {
     window.bgRenderQueue = [];
     window.bgRenderRunning = false;
-}
+};
 
 function isPageRendered(pageNum) {
     return window.renderedPages.has(pageNum);
@@ -704,7 +679,7 @@ window.renderPageNow = async function(pageNum, forceScale = null) {
 async function precomputeAllSearches() {
     if (searchCache._deduplicated) return;
     
-    const combinedRegex = getKeywordRegex(window.KEYWORDS);
+    const combinedRegex = window.getKeywordRegex(window.KEYWORDS);
     
     for (let pageNum = 1; pageNum <= window.totalPages; pageNum++) {
         const cached = window.textPageCache[pageNum];
@@ -1029,7 +1004,6 @@ window.setZoom = function(newScale, force = false) {
 
     const oldScrollTop = window.viewerScroll.scrollTop;
     const oldScrollHeight = window.viewerScroll.scrollHeight;
-    const scaleRatio = clampedScale / window.currentScale;
 
     window.currentScale = clampedScale;
     window.updateZoomDisplay();
@@ -1096,12 +1070,13 @@ window.clearAllResults = function() {
     const viewerDropMsg = document.getElementById('viewerDropMsg');
     if (viewerDropMsg) viewerDropMsg.style.display = 'block';
     window.statusBar.textContent = '';
-    objectUrls.forEach(url => URL.revokeObjectURL(url));
-    objectUrls = [];
+    window.objectUrls.forEach(url => URL.revokeObjectURL(url));
+    window.objectUrls = [];
     window.totalMatchesFound = 0;
     window.totalDocsFound = 0;
     window.docDataCache = {};
-    docContentCache = {};
+    window.docContentCache = {};
+    window.docTextCache = {};
     window.expandedTreeItems.clear();
     window.updateStats();
 
@@ -1138,420 +1113,6 @@ window.startPrerender = async function() {
     }
 };
 
-// ========== FILE PROCESSING ==========
-
-async function processFiles(files) {
-    if (files.length === 0) return;
-
-    const viewerMsg = document.getElementById('viewerDropMsg');
-    if (viewerMsg) viewerMsg.style.display = 'none';
-
-    const statusMsgs = window.resultsArea.querySelectorAll('.status-msg');
-    statusMsgs.forEach(el => el.remove());
-
-    const ocrPrefix = OCR.enabled ? 'OCR triggered - ' : '';
-    window.statusBar.textContent = `${ocrPrefix}Scanning ${files.length} documents...`;
-    window.progressBar.style.width = '0%';
-
-    window.processed = 0;
-    window.totalFiles = files.length;
-
-    if (OCR.enabled) {
-        console.log('[PDF] Pre-initializing OCR worker...');
-        OCR.init().catch(err => console.error('[PDF] OCR init failed:', err));
-    }
-
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const url = URL.createObjectURL(file);
-        objectUrls.push(url);
-
-        const arrayBuffer = await file.arrayBuffer();
-
-        if (OCR.enabled) {
-            window.statusBar.textContent = `${ocrPrefix}Scanning ${i + 1}/${files.length}: ${file.name}...`;
-        }
-
-        const type = getFileType(file.name);
-        if (type === 'pdf') {
-            await extractPdfText(arrayBuffer, file.name, url, file);
-        } else if (type === 'docx' || type === 'doc') {
-            await extractDocText(arrayBuffer, file.name, url, file);
-        }
-
-        window.updateProgressMainThread();
-
-        if (OCR.enabled) {
-            window.statusBar.textContent = `${ocrPrefix}Scanned ${i + 1}/${files.length} documents...`;
-        }
-    }
-}
-
-async function extractPdfText(arrayBuffer, fileName, id, file) {
-    try {
-        const fakeDoc = {
-            createElement: name => name === 'canvas' ? new OffscreenCanvas(1, 1) : null,
-            fonts: {}
-        };
-        
-        const pdfData = new Uint8Array(arrayBuffer);
-        
-        let pageTextData;
-        let numPages = 0;
-        
-        if (OCR.enabled) {
-            console.log('[PDF] Using OCR extraction for:', fileName);
-            const result = await OCR.extractText(pdfData);
-            pageTextData = result.pages;
-            numPages = result.numPages;
-        } else {
-            console.log('[PDF] Using native text extraction for:', fileName);
-            const pdf = await pdfjsLib.getDocument({ data: pdfData, ownerDocument: fakeDoc }).promise;
-            numPages = pdf.numPages;
-            pageTextData = [];
-            
-            for (let p = 1; p <= numPages; p++) {
-                const page = await pdf.getPage(p);
-                const content = await page.getTextContent();
-                const vp = page.getViewport({ scale: 1.0 });
-                
-                let pageText = '';
-                for (const item of content.items) {
-                    pageText += item.str;
-                }
-                const textItems = [];
-                for (const item of content.items) {
-                    textItems.push({
-                        text: item.str,
-                        transform: item.transform,
-                        width: item.width,
-                        height: item.height
-                    });
-                }
-                pageTextData.push({ text: pageText, viewport: { width: vp.width, height: vp.height }, items: textItems });
-            }
-        }
-        
-        const keywords = window.KEYWORDS || [];
-        const combinedRegex = getKeywordRegex(keywords);
-        const counts = {};
-        let totalMatches = 0;
-
-        if (combinedRegex) {
-            for (const pageData of pageTextData) {
-                const text = pageData.text || '';
-                let match;
-                const regex = new RegExp(combinedRegex.source, 'gi');
-                while ((match = regex.exec(text)) !== null) {
-                    if (match[0].length < 3) continue;
-                    if (!/[a-zA-Z]/.test(match[0])) continue;
-                    const lower = match[0].toLowerCase();
-                    const key = keywords.find(k => k.toLowerCase() === lower) || lower;
-                    counts[key] = (counts[key] || 0) + 1;
-                    totalMatches++;
-                }
-            }
-        }
-
-        console.log('[PDF] Processed', fileName, '- Found', totalMatches, 'matches');
-
-        docTextCache[id] = { totalPages: numPages, pages: pageTextData, fileName };
-        window.totalDocsFound++;
-
-        window.renderCard(fileName, counts, id, file);
-        window.totalMatchesFound += totalMatches;
-        window.updateStats();
-    } catch (err) {
-        console.error('[PDF] Error processing PDF:', err);
-        window.updateProgressMainThread();
-    }
-}
-
-async function extractDocText(arrayBuffer, fileName, id, file) {
-    try {
-        const type = getFileType(fileName);
-        let htmlContent = '';
-        let plainText = '';
-
-        if (type === 'docx' || type === 'doc') {
-            const htmlResult = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
-            htmlContent = htmlResult.value;
-            const textResult = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-            plainText = textResult.value.replace(/\s+/g, ' ').trim();
-        }
-
-        if (!plainText && !htmlContent) {
-            console.warn('[DOC] No text extracted from:', fileName);
-            window.updateProgressMainThread();
-            return;
-        }
-
-        const keywords = window.KEYWORDS || [];
-        const combinedRegex = getKeywordRegex(keywords);
-        const counts = {};
-        let totalMatches = 0;
-        let match;
-
-        if (combinedRegex) {
-            const regex = new RegExp(combinedRegex.source, 'gi');
-            while ((match = regex.exec(plainText)) !== null) {
-                if (match[0].length < 3) continue;
-                if (!/[a-zA-Z]/.test(match[0])) continue;
-                const lower = match[0].toLowerCase();
-                const key = keywords.find(k => k.toLowerCase() === lower) || lower;
-                counts[key] = (counts[key] || 0) + 1;
-                totalMatches++;
-            }
-        }
-
-        console.log('[DOC] Processed', fileName, '- Found', totalMatches, 'matches');
-
-        docContentCache[id] = { html: htmlContent, text: plainText, fileName, type };
-        window.totalDocsFound++;
-
-        window.renderCard(fileName, counts, id, file);
-        window.totalMatchesFound += totalMatches;
-        window.updateStats();
-    } catch (err) {
-        console.error('[DOC] Error processing document:', err);
-        window.updateProgressMainThread();
-    }
-}
-
-// ========== DROP HANDLING ==========
-
-async function handleDrop(e) {
-    const entries = [];
-    if (e.dataTransfer.items) {
-        for (let i = 0; i < e.dataTransfer.items.length; i++) {
-            const entry = e.dataTransfer.items[i].webkitGetAsEntry();
-            if (entry) entries.push(entry);
-        }
-    }
-    basePath = '';
-    let filesToProcess = [];
-    for (const entry of entries) {
-        if (entry.isFile && entry.name.toLowerCase().endsWith('.zip')) {
-            const zipFile = await new Promise((resolve) => entry.file(resolve));
-            basePath = zipFile.name.replace(/\.zip$/i, '');
-            filesToProcess = filesToProcess.concat(await extractAllFromZip(zipFile));
-        } else {
-            await traverseFileTree(entry, filesToProcess, '');
-            basePath = entry.name;
-        }
-    }
-
-    if (filesToProcess.length === 0) {
-        const viewerMsg = document.getElementById('viewerDropMsg');
-        if (viewerMsg) viewerMsg.style.display = 'none';
-        const statusMsgs = window.resultsArea.querySelectorAll('.status-msg');
-        statusMsgs.forEach(el => el.remove());
-        window.statusBar.textContent = 'No supported files found in folder';
-        window.progressBar.style.width = '0%';
-    } else {
-        processFiles(filesToProcess);
-    }
-}
-
-window.sidebar.addEventListener('drop', handleDrop);
-
-const viewerContainer = document.querySelector('.viewer-container');
-
-async function traverseFileTree(item, fileList, baseDir = '') {
-    const currentPath = baseDir ? baseDir + '/' + item.name : item.name;
-    const type = getFileType(item.name);
-    if (item.isFile && type) {
-        const file = await new Promise((resolve) => item.file(resolve));
-        file.relativePath = currentPath;
-        fileList.push(file);
-    } else if (item.isDirectory) {
-        const dirReader = item.createReader();
-        const entries = await new Promise((resolve) => dirReader.readEntries(resolve));
-        for (const entry of entries) await traverseFileTree(entry, fileList, currentPath);
-    }
-}
-
-document.getElementById('folderInput').addEventListener('change', async (e) => {
-    let filesToProcess = [];
-    for (const file of e.target.files) {
-        const type = getFileType(file.name);
-        if (file.name.toLowerCase().endsWith('.zip')) {
-            filesToProcess = filesToProcess.concat(await extractAllFromZip(file));
-        } else if (type) {
-            file.relativePath = file.webkitRelativePath || file.name;
-            filesToProcess.push(file);
-        }
-    }
-    processFiles(filesToProcess);
-});
-
-async function extractAllFromZip(zipFile) {
-    const zip = await JSZip.loadAsync(zipFile);
-    const extracted = [];
-    const promises = [];
-    zip.forEach((path, entry) => {
-        if (!entry.dir) {
-            const type = getFileType(path);
-            if (type) {
-                let mimeType = 'application/pdf';
-                if (type === 'docx') mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-                else if (type === 'doc') mimeType = 'application/msword';
-                promises.push(entry.async("blob").then(blob => {
-                    const file = new File([blob], path, { type: mimeType });
-                    file.relativePath = path;
-                    extracted.push(file);
-                }));
-            }
-        }
-    });
-    await Promise.all(promises);
-    return extracted;
-}
-
-// ========== RESCAN ==========
-
-async function rescanAllDocuments() {
-    console.log('[PDF] rescanAllDocuments called, OCR.enabled:', OCR.enabled);
-    
-    const viewerMsg = document.getElementById('viewerDropMsg');
-    if (viewerMsg) viewerMsg.style.display = 'none';
-    
-    const ocrPrefix = OCR.enabled ? 'OCR triggered - ' : '';
-    window.statusBar.textContent = `${ocrPrefix}Scanning ${objectUrls.length} documents...`;
-    window.progressBar.style.width = '0%';
-    
-    window.resultsArea.innerHTML = '';
-    
-    window.totalMatchesFound = 0;
-    window.totalDocsFound = 0;
-    
-    if (OCR.enabled) {
-        console.log('[PDF] OCR mode enabled, re-extracting all documents with OCR');
-        ocrScanning = true;
-        
-        await OCR.init().catch(err => console.error('[PDF] OCR init failed:', err));
-        
-        for (let i = 0; i < objectUrls.length; i++) {
-            const url = objectUrls[i];
-            const cached = docTextCache[url];
-            const fileName = cached?.fileName || `Document ${i + 1}`;
-            
-            window.statusBar.textContent = `${ocrPrefix}Scanning ${i + 1}/${objectUrls.length}: ${fileName}...`;
-            
-            try {
-                const response = await fetch(url);
-                const blob = await response.blob();
-                const arrayBuffer = await blob.arrayBuffer();
-                delete docTextCache[url];
-                await extractPdfText(arrayBuffer, fileName, url);
-            } catch (err) {
-                console.error('[PDF] OCR rescan error:', err);
-            }
-            
-            const pct = Math.round(((i + 1) / objectUrls.length) * 100);
-            window.progressBar.style.width = pct + '%';
-        }
-        ocrScanning = false;
-        console.log('[PDF] OCR rescan complete');
-    } else {
-        const combinedRegex = getKeywordRegex(window.KEYWORDS);
-        
-        for (let i = 0; i < objectUrls.length; i++) {
-            const url = objectUrls[i];
-            const cached = docTextCache[url];
-            
-            if (!cached) continue;
-            
-            const counts = {};
-            let fileTotalMatches = 0;
-            
-            for (let p = 0; p < cached.pages.length; p++) {
-                const text = cached.pages[p].text;
-                let match;
-                const regex = new RegExp(combinedRegex.source, 'gi');
-                while ((match = regex.exec(text)) !== null) {
-                    if (match[0].length < 3) continue;
-                    if (!/[a-zA-Z]/.test(match[0])) continue;
-                    const lowerMatch = match[0].toLowerCase();
-                    const originalKey = window.KEYWORDS.find(k => k.toLowerCase() === lowerMatch) || lowerMatch;
-                    counts[originalKey] = (counts[originalKey] || 0) + 1;
-                    fileTotalMatches++;
-                }
-            }
-            
-            const fileName = cached.fileName || `Document ${i + 1}`;
-            window.totalDocsFound++;
-            
-            if (fileTotalMatches > 0) {
-                window.renderCard(fileName, counts, url);
-                window.totalMatchesFound += fileTotalMatches;
-            } else {
-                window.renderNoMatchCard(fileName, url);
-            }
-            
-            const pct = Math.round(((i + 1) / objectUrls.length) * 100);
-            window.progressBar.style.width = pct + '%';
-        }
-    }
-    
-    window.updateStats();
-    
-    if (window.totalMatchesFound === 0) {
-        window.statusBar.textContent = "No matches found";
-    } else {
-        window.statusBar.textContent = `${window.totalMatchesFound} matches across ${window.totalDocsFound} document${window.totalDocsFound !== 1 ? 's' : ''}`;
-    }
-}
-
-async function rescanWithNewKeywords() {
-    if (!window.pdfDoc || !window.currentDocUrl) return;
-
-    const combinedRegex = getKeywordRegex(window.KEYWORDS);
-    let totalMatches = 0;
-    const docCounts = {};
-
-    for (let pageNum = 1; pageNum <= window.totalPages; pageNum++) {
-        const cached = window.textPageCache[pageNum];
-        if (!cached) continue;
-        const text = cached.text;
-        let match;
-        const regex = new RegExp(combinedRegex.source, 'gi');
-        while ((match = regex.exec(text)) !== null) {
-            if (match[0].length < 3) continue;
-            if (!/[a-zA-Z]/.test(match[0])) continue;
-            totalMatches++;
-            const key = window.KEYWORDS.find(k => k.toLowerCase() === match[0].toLowerCase()) || match[0].toLowerCase();
-            docCounts[key] = (docCounts[key] || 0) + 1;
-        }
-    }
-
-    const activeCard = window.viewer.querySelector('.doc-card.active, .tree-header.active')?.closest('.doc-card') || window.viewer.querySelector('.doc-card.active');
-    if (activeCard) {
-        const cardName = activeCard.querySelector('.doc-name').textContent;
-        const badgeGrid = activeCard.querySelector('.badge-grid');
-        if (badgeGrid) {
-            badgeGrid.innerHTML = '';
-            window.KEYWORDS.forEach(k => {
-                const count = docCounts[k] || 0;
-                if (count > 0) {
-                    const b = document.createElement('div');
-                    b.className = 'badge';
-                    b.textContent = `${k}: ${count}`;
-                    b.onclick = (e) => {
-                        e.stopPropagation();
-                        window.cycleSearch(k);
-                    };
-                    badgeGrid.appendChild(b);
-                }
-            });
-        }
-    }
-
-    window.totalMatchesFound = totalMatches;
-    window.updateStats();
-    precomputeAllSearches();
-}
-
 // ========== KEYWORDS INIT ==========
 
 const keywordListSelect = document.getElementById('keywordListSelect');
@@ -1561,23 +1122,28 @@ keywordListSelect.addEventListener('change', () => {
     if (window.switchKeywordList && window.switchKeywordList(listName)) {
         searchCache = {};
         window.clearSearch();
-        if (objectUrls.length > 0) {
-            rescanAllDocuments();
+        if (window.objectUrls.length > 0) {
+            window.rescanAllDocuments();
         }
     }
 });
 
 function populateListSelector() {
-    if (typeof window.getKeywordLists === 'function') {
-        const lists = window.getKeywordLists();
-        keywordListSelect.innerHTML = '';
-        lists.forEach(list => {
-            const opt = document.createElement('option');
-            opt.value = list.name;
-            opt.textContent = list.name;
-            if (list.name === window.currentKeywordList) opt.selected = true;
-            keywordListSelect.appendChild(opt);
-        });
+    const keywordListSelect = document.getElementById('keywordListSelect');
+    if (!keywordListSelect) return;
+    
+    keywordListSelect.innerHTML = '';
+    for (const name of Object.keys(window.KEYWORD_LISTS || {})) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        const list = window.KEYWORD_LISTS[name] || [];
+        opt.textContent = `${name} (${list.length})`;
+        keywordListSelect.appendChild(opt);
+    }
+    
+    const savedListName = localStorage.getItem('tender_keyword_list') || window.DEFAULT_LIST_NAME;
+    if (window.KEYWORD_LISTS && window.KEYWORD_LISTS[savedListName]) {
+        keywordListSelect.value = savedListName;
     }
 }
 
@@ -1599,12 +1165,26 @@ window.toggleKeywordManager = function() {
     }
 
     const isShowing = modal.classList.toggle('show');
+    console.log('toggleKeywordManager opened', isShowing);
 
     if (isShowing) {
-        if (typeof window.populateModalListSelector === 'function') {
-            window.populateModalListSelector();
+        // Direct population of modal dropdown
+        const modalSelector = document.getElementById('listSelector');
+        console.log('direct modalSelector', { modalSelector: !!modalSelector, KW: window.KEYWORD_LISTS });
+        
+        if (modalSelector && window.KEYWORD_LISTS) {
+            modalSelector.innerHTML = '';
+            for (const name of Object.keys(window.KEYWORD_LISTS)) {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                modalSelector.appendChild(opt);
+                console.log('added', name);
+            }
         }
-        if (typeof window.loadListIntoEditor === 'function') {
+        
+        // Load editor
+        if (window.loadListIntoEditor) {
             window.loadListIntoEditor();
         }
     }

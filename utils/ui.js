@@ -7,7 +7,6 @@ window.mobileSidebarOpen = false;
 window.settingsOpen = false;
 window.settingsJustToggled = false;
 window.docDataCache = {};
-window.showOcrButtons = localStorage.getItem('pdf_show_ocr_buttons') === 'true';
 
 // ========== DOM REFS ==========
 
@@ -29,6 +28,7 @@ const resultsArea = document.getElementById('results');
 const progressBar = document.getElementById('progressBar');
 const sidebar = document.getElementById('sidebar');
 const statusBar = document.getElementById('statusBar');
+const verboseStatusBar = document.getElementById('verboseStatusBar');
 
 // Attach DOM refs to window for pdf.js access
 window.viewer = viewer;
@@ -49,6 +49,7 @@ window.resultsArea = resultsArea;
 window.progressBar = progressBar;
 window.sidebar = sidebar;
 window.statusBar = statusBar;
+window.verboseStatusBar = verboseStatusBar;
 
 // ========== SEARCH OVERLAY ==========
 
@@ -152,8 +153,20 @@ window.showSearchOverlay = function() {
     searchOverlay.classList.add('visible');
     searchOverlayInput.value = '';
     searchOverlayInput.focus();
-    customSearchResults = [];
-    customSearchIndex = 0;
+    searchOverlayInput.placeholder = window.currentDocUrl && window.docContentCache[window.currentDocUrl]
+        ? 'Search document... (Esc to close)'
+        : 'Search PDF... (Esc to close)';
+
+    if (window.currentDocUrl && window.docContentCache[window.currentDocUrl]) {
+        window.docSearchResults = [];
+        window.docCurrentMatchIndex = 0;
+        window.renderDocHighlights();
+    } else {
+        customSearchResults = [];
+        customSearchIndex = 0;
+        window.clearCustomHighlights();
+    }
+
     searchOverlayResults.textContent = '0 / 0';
     window.closeMobileSidebar();
 };
@@ -168,6 +181,23 @@ window.closeSearchOverlay = function() {
 };
 
 window.performCustomSearch = function(query) {
+    if (window.currentDocUrl && window.docContentCache[window.currentDocUrl]) {
+        if (!query) {
+            window.docSearchResults = [];
+            window.docCurrentMatchIndex = 0;
+            searchOverlayResults.textContent = '0 / 0';
+            window.renderDocHighlights();
+            return;
+        }
+        window.performDocSearch(query);
+        if (window.docSearchResults.length > 0) {
+            searchOverlayResults.textContent = `${window.docCurrentMatchIndex + 1} / ${window.docSearchResults.length}`;
+        } else {
+            searchOverlayResults.textContent = '0 / 0';
+        }
+        return;
+    }
+
     if (!query || !window.pdfDoc) {
         customSearchResults = [];
         customSearchIndex = 0;
@@ -254,8 +284,7 @@ window.renderAllCustomHighlights = function() {
     }
 
     const currentResultCoords = window.getTextCoords(window.textPageCache[currentPage], currentResult.startIndex, currentResult.endIndex);
-    const pageEl = document.getElementById('page-' + currentPage);
-    if (pageEl && currentResultCoords) {
+    if (currentResultCoords) {
         const halfViewport = viewerScroll.clientHeight / 2;
         const halfHeight = (currentResultCoords.height * window.currentScale) / 2;
         const targetTop = pageEl.offsetTop + currentResultCoords.startY * window.currentScale - halfViewport + halfHeight;
@@ -302,12 +331,32 @@ window.clearCustomHighlights = function() {
 };
 
 window.customFindNext = function() {
+    if (window.currentDocUrl && window.docContentCache[window.currentDocUrl]) {
+        const query = searchOverlayInput.value;
+        if (query && window.docSearchResults.length > 0) {
+            window.cycleDocSearch(query);
+            if (window.docSearchResults.length > 0) {
+                searchOverlayResults.textContent = `${window.docCurrentMatchIndex + 1} / ${window.docSearchResults.length}`;
+            }
+        }
+        return;
+    }
+
     if (customSearchResults.length > 0) {
         window.customGoToMatch(customSearchIndex + 1);
     }
 };
 
 window.customFindPrev = function() {
+    if (window.currentDocUrl && window.docContentCache[window.currentDocUrl]) {
+        if (window.docSearchResults.length > 0) {
+            window.docCurrentMatchIndex = (window.docCurrentMatchIndex - 1 + window.docSearchResults.length) % window.docSearchResults.length;
+            window.goToDocMatch(window.docCurrentMatchIndex);
+            searchOverlayResults.textContent = `${window.docCurrentMatchIndex + 1} / ${window.docSearchResults.length}`;
+        }
+        return;
+    }
+
     if (customSearchResults.length > 0) {
         window.customGoToMatch(customSearchIndex - 1);
     }
@@ -381,33 +430,6 @@ window.toggleSettings = function(e) {
     
     menu.appendChild(animateBtn);
     
-    // OCR Buttons Toggle (BETA)
-    const ocrToggleBtn = document.createElement('button');
-    ocrToggleBtn.className = 'toggle-btn';
-    if (window.showOcrButtons) ocrToggleBtn.classList.add('on');
-    ocrToggleBtn.onclick = function() {
-        ocrToggleBtn.classList.toggle('on');
-        window.showOcrButtons = !window.showOcrButtons;
-        localStorage.setItem('pdf_show_ocr_buttons', window.showOcrButtons);
-        const stateSpan = ocrToggleBtn.querySelector('.toggle-state');
-        if (stateSpan) {
-            stateSpan.textContent = window.showOcrButtons ? 'ON' : 'OFF';
-        }
-        window.renderResultsArea();
-    };
-    
-    const ocrLabel = document.createElement('span');
-    ocrLabel.className = 'toggle-label';
-    ocrLabel.textContent = 'Show OCR Buttons (Beta) ';
-    ocrToggleBtn.appendChild(ocrLabel);
-    
-    const ocrState = document.createElement('span');
-    ocrState.className = 'toggle-state';
-    ocrState.textContent = window.showOcrButtons ? 'ON' : 'OFF';
-    ocrToggleBtn.appendChild(ocrState);
-    
-    menu.appendChild(ocrToggleBtn);
-    
     const layoutSection = document.createElement('div');
     layoutSection.style.display = 'flex';
     layoutSection.style.flexDirection = 'column';
@@ -445,15 +467,78 @@ window.toggleSettings = function(e) {
         btn.onclick = () => {
             window.settingsJustToggled = true;
             window.setLayout(l.id);
-            window.closeSettingsMenu();
+            layoutBtns.querySelectorAll('button').forEach(b => {
+                const isSelected = b.textContent.toLowerCase() === l.label.toLowerCase();
+                b.style.background = isSelected ? 'var(--green)' : 'transparent';
+                b.style.color = isSelected ? 'white' : 'var(--grey-300)';
+            });
         };
         layoutBtns.appendChild(btn);
     });
     
     layoutSection.appendChild(layoutBtns);
     menu.appendChild(layoutSection);
+
+    const githubSection = document.createElement('div');
+    githubSection.style.marginTop = '4px';
+    githubSection.style.paddingTop = '8px';
+    githubSection.style.borderTop = '1px solid var(--grey-600)';
+    githubSection.style.display = 'flex';
+    githubSection.style.justifyContent = 'center';
+
+    const githubLink = document.createElement('a');
+    githubLink.href = 'https://github.com/kvnhndrsn/kwpdf';
+    githubLink.target = '_blank';
+    githubLink.rel = 'noopener noreferrer';
+    githubLink.style.display = 'flex';
+    githubLink.style.alignItems = 'center';
+    githubLink.style.gap = '6px';
+    githubLink.style.color = 'var(--grey-300)';
+    githubLink.style.textDecoration = 'none';
+    githubLink.style.fontSize = '0.8rem';
+    githubLink.style.transition = 'color 0.2s';
+
+    const githubIcon = document.createElement('img');
+    githubIcon.src = 'icons/github.svg';
+    githubIcon.alt = 'GitHub';
+    githubIcon.style.width = '16px';
+    githubIcon.style.height = '16px';
+    githubIcon.style.filter = 'brightness(0) invert(0.7)';
+
+    githubLink.onmouseenter = () => {
+        githubLink.style.color = 'var(--green-light)';
+        githubIcon.style.filter = 'brightness(0) invert(0.85) saturate(1.5) hue-rotate(80deg)';
+    };
+    githubLink.onmouseleave = () => {
+        githubLink.style.color = 'var(--grey-300)';
+        githubIcon.style.filter = 'brightness(0) invert(0.7)';
+    };
+
+    githubLink.appendChild(githubIcon);
+    githubLink.appendChild(document.createTextNode('source code on GitHub'));
+
+    githubSection.appendChild(githubLink);
+    menu.appendChild(githubSection);
     
     document.body.appendChild(menu);
+    
+    setTimeout(() => {
+        document.addEventListener('click', window.closeSettingsOnClickOutside);
+    }, 0);
+};
+
+window.closeSettingsOnClickOutside = function(e) {
+    const menu = document.getElementById('settingsMenu');
+    const btn = document.getElementById('settingsBtn');
+    if (window.settingsJustToggled) {
+        window.settingsJustToggled = false;
+        return;
+    }
+    if (menu && !menu.contains(e.target) && e.target !== btn) {
+        menu.remove();
+        window.settingsOpen = false;
+        document.removeEventListener('click', window.closeSettingsOnClickOutside);
+    }
 };
 
 window.toggleAnimate = function() {
@@ -506,14 +591,19 @@ window.toggleMobileSidebar = function() {
 };
 
 window.checkMobileLayout = function() {
-    const isMobile = window.innerWidth <= 700;
+    const isMobile = window.innerWidth <= 600;
     const sidebarEl = document.getElementById('sidebar');
     const toggleBtn = document.querySelector('.mobile-toggle-sidebar');
     const viewerEl = document.querySelector('.viewer-container');
     if (toggleBtn) {
-        toggleBtn.style.display = isMobile ? 'block' : 'none';
+        toggleBtn.style.display = isMobile ? 'flex' : 'none';
     }
-    if (isMobile && !window.mobileSidebarOpen) {
+    if (!isMobile) {
+        sidebarEl.classList.remove('collapsed', 'open');
+        viewerEl.style.height = '';
+        sidebarEl.style.height = '';
+        window.mobileSidebarOpen = false;
+    } else if (!window.mobileSidebarOpen) {
         sidebarEl.classList.add('collapsed');
         sidebarEl.classList.remove('open');
         viewerEl.style.height = 'calc(100% - 44px)';
@@ -523,7 +613,14 @@ window.checkMobileLayout = function() {
 // ========== RESULTS RENDERING ==========
 
 window.getPathParts = function(file, baseFolderName) {
-    const fileName = file.relativePath || file.name;
+    let fileName;
+    if (file && (file.relativePath || file.name)) {
+        fileName = file.relativePath || file.name;
+    } else if (baseFolderName) {
+        fileName = baseFolderName;
+    } else {
+        fileName = '';
+    }
     
     if (fileName.includes('/') || fileName.includes('\\')) {
         const parts = fileName.split(/[/\\]/);
@@ -535,53 +632,54 @@ window.getPathParts = function(file, baseFolderName) {
     return { name: fileName, folder: baseFolderName || window.basePath || '' };
 };
 
+window.renderPlaceholderCard = function(fileName, url, file) {
+    const type = window.getFileType(fileName);
+    const { name: baseName, folder } = window.getPathParts(file, null);
+    window.docDataCache[url] = { name: baseName, folder, fullPath: fileName, counts: {}, url, type };
+
+    if (window.currentLayout === 'tree') {
+        window.renderResultsArea();
+        return;
+    }
+
+    const card = document.createElement('div');
+    card.className = 'doc-card doc-card-minimal';
+    card.dataset.url = url;
+    card.dataset.type = type;
+    card.onclick = () => { window.setActiveCard(card); window.loadDocument(url); window.closeMobileSidebar(); };
+    card.innerHTML = `<div class="doc-name">${window.getFileIcon(fileName)} ${fileName}</div>`;
+
+    const grid = document.createElement('div');
+    grid.className = 'badge-grid';
+    card.appendChild(grid);
+    resultsArea.appendChild(card);
+};
+
 window.renderCard = function(fileName, counts, url, file) {
     const { name: baseName, folder } = window.getPathParts(file, null);
     const type = window.getFileType(fileName);
     window.docDataCache[url] = { name: baseName, folder, fullPath: fileName, counts, url, type };
 
-    console.log('[UI] renderCard called for:', fileName);
-    const card = document.createElement('div');
+    if (window.currentLayout === 'tree') {
+        window.renderResultsArea();
+        return;
+    }
+
+    // Find existing placeholder card and update it
+    let card = resultsArea.querySelector(`.doc-card[data-url="${CSS.escape(url)}"]`);
+    if (!card) {
+        card = document.createElement('div');
+        card.className = 'doc-card';
+        card.dataset.url = url;
+        card.dataset.type = type;
+        card.onclick = () => { window.setActiveCard(card); window.loadDocument(url); window.closeMobileSidebar(); };
+        resultsArea.appendChild(card);
+    }
+
     card.className = 'doc-card';
-    card.dataset.url = url;
     card.dataset.type = type;
-    card.onclick = () => { window.setActiveCard(card); window.loadDocument(url); window.closeMobileSidebar(); };
-    const iconHtml = window.getFileIcon(fileName);
-    let buttonHtml = '';
-    if (window.showOcrButtons) {
-        buttonHtml = `<button class="ocr-btn" data-url="${url}" title="Toggle OCR"><img src="./icons/ocr.svg" width="16" height="16" alt="OCR" onerror="this.onerror=null;console.log(\'OCR SVG failed to load\');this.style.display=\'none\'"></button>`;
-    }
-    card.innerHTML = `<div class="doc-name">${iconHtml} ${buttonHtml} ${fileName}</div>`;
-    
-    if (window.showOcrButtons) {
-        console.log('[UI] Card innerHTML:', card.innerHTML);
-        
-        const ocrBtn = card.querySelector('.ocr-btn');
-        if (!ocrBtn) {
-            console.error('[UI] OCR button not found in card for:', fileName);
-            console.error('[UI] Card content:', card.innerHTML);
-            return;
-        }
-        console.log('[UI] OCR button found for:', fileName);
-        
-        if (window.isOcrEnabled(url)) {
-            ocrBtn.classList.add('ocr-enabled');
-        }
-        ocrBtn.onclick = (e) => {
-            e.stopPropagation();
-            const enabled = window.toggleOcr(url);
-            if (enabled) {
-                ocrBtn.classList.add('ocr-enabled');
-                window.loadDocument(url);
-            } else {
-                ocrBtn.classList.remove('ocr-enabled');
-                if (window.currentDocUrl === url) {
-                    window.loadDocument(url);
-                }
-            }
-        };
-    }
-    console.log('[UI] Creating card elements for:', fileName);
+    card.innerHTML = `<div class="doc-name">${window.getFileIcon(fileName)} ${fileName}</div>`;
+
     const grid = document.createElement('div');
     grid.className = 'badge-grid';
 
@@ -615,69 +713,42 @@ window.renderCard = function(fileName, counts, url, file) {
                 } else {
                     window.loadDocument(url, k);
                 }
-                    }
-                    grid.appendChild(b);
-                }
-            });
-                  card.appendChild(grid);
-                  resultsArea.appendChild(card);
+            };
+            grid.appendChild(b);
+        }
+    });
+    card.appendChild(grid);
 };
 
 window.renderNoMatchCard = function(fileName, url, file) {
     const { name: baseName, folder } = window.getPathParts(file, null);
     const finalName = fileName;
-    window.docDataCache[url] = { name: baseName, folder, fullPath: finalName, counts: {}, url, type: window.getFileType(fileName) };
-
-console.log('[UI] renderNoMatchCard called for:', fileName);
-
     const type = window.getFileType(fileName);
-    const card = document.createElement('div');
+    window.docDataCache[url] = { name: baseName, folder, fullPath: finalName, counts: {}, url, type };
+
+    if (window.currentLayout === 'tree') {
+        window.renderResultsArea();
+        return;
+    }
+
+    let card = resultsArea.querySelector(`.doc-card[data-url="${CSS.escape(url)}"]`);
+    if (!card) {
+        card = document.createElement('div');
+        card.className = 'doc-card doc-card-minimal';
+        card.dataset.url = url;
+        card.dataset.type = type;
+        card.onclick = () => { window.setActiveCard(card); window.loadDocument(url); window.closeMobileSidebar(); };
+        resultsArea.appendChild(card);
+    }
+
     card.className = 'doc-card doc-card-minimal';
-    card.dataset.url = url;
     card.dataset.type = type;
-    card.onclick = () => { window.setActiveCard(card); window.loadDocument(url); window.closeMobileSidebar(); };
-    const iconHtml = window.getFileIcon(fileName);
-    let buttonHtml = '';
-    if (window.showOcrButtons) {
-        buttonHtml = `<button class="ocr-btn" data-url="${url}" title="Toggle OCR"><img src="./icons/ocr.svg" width="16" height="16" alt="OCR" onerror="this.onerror=null;console.log('OCR SVG failed to load');this.style.display='none'"></button>`;
-    }
-    card.innerHTML = `<div class="doc-name">${iconHtml} ${buttonHtml} ${fileName}</div>`;
-    
-    if (window.showOcrButtons) {
-        console.log('[UI] No-match card innerHTML:', card.innerHTML);
-        
-        const ocrBtn = card.querySelector('.ocr-btn');
-        if (!ocrBtn) {
-            console.error('[UI] OCR button not found in no-match card for:', fileName);
-            console.error('[UI] Card content:', card.innerHTML);
-            return;
-        }
-        console.log('[UI] OCR button found for no-match card:', fileName);
-        
-        if (window.isOcrEnabled(url)) {
-            ocrBtn.classList.add('ocr-enabled');
-        }
-        ocrBtn.onclick = (e) => {
-            e.stopPropagation();
-            const enabled = window.toggleOcr(url);
-            if (enabled) {
-                ocrBtn.classList.add('ocr-enabled');
-                window.loadDocument(url);
-            } else {
-                ocrBtn.classList.remove('ocr-enabled');
-                if (window.currentDocUrl === url) {
-                    window.loadDocument(url);
-                }
-            }
-        };
-    }
-    resultsArea.appendChild(card);
+    card.innerHTML = `<div class="doc-name">${window.getFileIcon(fileName)} ${fileName}</div>`;
 };
 
 window.renderTreeItem = function(doc) {
     const item = document.createElement('div');
     item.className = 'tree-item';
-    item.dataset.docUrl = doc.url;
     
     const totalMatches = Object.values(doc.counts).reduce((a, b) => a + b, 0);
     const isExpanded = window.expandedTreeItems.has(doc.url);
@@ -691,67 +762,13 @@ window.renderTreeItem = function(doc) {
     arrow.textContent = totalMatches > 0 ? (isExpanded ? '▼' : '▶') : '│';
     arrow.onclick = (e) => {
         e.stopPropagation();
-        if (totalMatches <= 0) return;
-        
-        const isExpanding = !window.expandedTreeItems.has(doc.url);
-        if (isExpanding) {
-            window.expandedTreeItems.add(doc.url);
-        } else {
-            window.expandedTreeItems.delete(doc.url);
-        }
-        
-        // Targeted update: find the specific tree item
-        const treeItem = document.querySelector(`.tree-item[data-doc-url="${doc.url}"]`);
-        if (!treeItem) return;
-        
-        // Update arrow icon
-        const arrowEl = treeItem.querySelector('.tree-arrow');
-        if (arrowEl) {
-            arrowEl.textContent = totalMatches > 0 ? (isExpanding ? '▼' : '▶') : '│';
-        }
-        
-        if (isExpanding) {
-            // Add children
-            const children = document.createElement('div');
-            children.className = 'tree-children';
-            
-            window.KEYWORDS.forEach(k => {
-                const cnt = doc.counts[k] || 0;
-                if (cnt > 0) {
-                    const child = document.createElement('div');
-                    child.className = 'tree-child';
-                    child.onclick = () => {
-                        if (doc.url === window.currentDocUrl) {
-                            const type = doc.type;
-                            if (type === 'pdf') {
-                                window.cycleSearch(k);
-                            } else {
-                                window.cycleDocSearch(k);
-                            }
-                        } else {
-                            window.loadDocument(doc.url, k);
-                        }
-                    };
-                    
-                    const kw = document.createElement('span');
-                    kw.className = 'tree-child-kw';
-                    kw.textContent = k;
-                    child.appendChild(kw);
-                    
-                    const c = document.createElement('span');
-                    c.className = 'tree-child-count';
-                    c.textContent = cnt;
-                    child.appendChild(c);
-                    
-                    children.appendChild(child);
-                }
-            });
-            
-            treeItem.appendChild(children);
-        } else {
-            // Remove children
-            const children = treeItem.querySelector('.tree-children');
-            if (children) children.remove();
+        if (totalMatches > 0) {
+            if (window.expandedTreeItems.has(doc.url)) {
+                window.expandedTreeItems.delete(doc.url);
+            } else {
+                window.expandedTreeItems.add(doc.url);
+            }
+            window.renderResultsArea();
         }
     };
     header.appendChild(arrow);
@@ -765,26 +782,6 @@ window.renderTreeItem = function(doc) {
     name.className = 'tree-name';
     name.textContent = doc.name;
     header.appendChild(name);
-    
-    console.log('[UI] Created tree item for:', doc.name);
-    
-    if (window.showOcrButtons) {
-        const ocrBtn = document.createElement('button');
-        ocrBtn.className = 'ocr-btn' + (window.isOcrEnabled(doc.url) ? ' ocr-enabled' : '');
-        ocrBtn.title = 'Toggle OCR';
-        ocrBtn.innerHTML = '<img src="./icons/ocr.svg" width="14" height="14" alt="OCR" onerror="this.onerror=null;console.log(\'OCR SVG failed to load\');this.style.display=\'none\'">';
-        ocrBtn.onclick = (e) => {
-            e.stopPropagation();
-            const enabled = window.toggleOcr(doc.url);
-            if (enabled) {
-                ocrBtn.classList.add('ocr-enabled');
-            } else {
-                ocrBtn.classList.remove('ocr-enabled');
-            }
-            window.loadDocument(doc.url);
-        };
-        header.appendChild(ocrBtn);
-    }
     
     if (totalMatches > 0) {
         const count = document.createElement('span');
@@ -851,20 +848,12 @@ window.renderTreeItem = function(doc) {
     return item;
 };
 
-const main_msg = '<div id="results" class="results-area"><h1 class="status-msg"><img src="icons/folder.svg" width="32" height="32" alt="folder"> <img src="icons/pdf.svg" width="32" height="32" alt="pdf"> <img src="icons/docx.svg" width="32" height="32" alt="docx"> <img src="icons/zip.svg" width="32" height="32" alt="zip"></h1><h2 class="status-msg">Drop here to begin scanning</h2></div>';
-
 window.renderResultsArea = function() {
-    const fragment = document.createDocumentFragment();
     resultsArea.innerHTML = '';
     resultsArea.className = 'results-area' + (window.currentLayout === 'tree' ? ' tree-mode' : '');
     
     if (window.currentLayout === 'tree') {
         const docs = Object.values(window.docDataCache);
-        
-        if (docs.length === 0) {
-            resultsArea.innerHTML = main_msg;
-            return;
-        }
         
         const folders = {};
         docs.forEach(doc => {
@@ -880,7 +869,6 @@ window.renderResultsArea = function() {
             if (b === '') return -1;
             return a.localeCompare(b);
         });
-        
         sortedFolders.forEach(folder => {
             const folderDocs = folders[folder];
             
@@ -888,100 +876,79 @@ window.renderResultsArea = function() {
                 const header = document.createElement('div');
                 header.className = 'tree-folder-header';
                 header.textContent = 'Files in root';
-                fragment.appendChild(header);
+                resultsArea.appendChild(header);
             } else {
                 const header = document.createElement('div');
                 header.className = 'tree-folder-header';
                 header.textContent = folder;
-                fragment.appendChild(header);
+                resultsArea.appendChild(header);
             }
-            
+
             folderDocs.sort((a, b) => a.name.localeCompare(b.name)).forEach(doc => {
-                fragment.appendChild(window.renderTreeItem(doc));
+                resultsArea.appendChild(window.renderTreeItem(doc));
             });
         });
         
-        resultsArea.appendChild(fragment);
+        if (docs.length === 0) {
+            resultsArea.innerHTML = '<h1 class="status-msg">&#10548;</h1><h1 class="status-msg">Drop a folder to begin scanning</h1>';
+        }
     } else {
         const docs = Object.values(window.docDataCache);
-        
-        if (docs.length === 0) {
-            resultsArea.innerHTML = main_msg;
-            return;
-        }
-        
         docs.forEach(doc => {
             const isActive = doc.url === window.currentDocUrl;
             const type = window.getFileType(doc.name);
-            const card = document.createElement('div');
-            card.className = 'doc-card' + (isActive ? ' active' : '');
-            card.dataset.url = doc.url;
-            card.dataset.type = type;
-            card.onclick = () => { window.setActiveCard(card); window.loadDocument(doc.url); window.closeMobileSidebar(); };
-            let ocrBtn = '';
-            if (window.showOcrButtons) {
-                ocrBtn = `<button class="ocr-btn" data-url="${doc.url}" title="Toggle OCR"><img src="./icons/ocr.svg" width="16" height="16" alt="OCR" onerror="this.onerror=null;console.log('OCR SVG failed to load');this.style.display='none'"></button>`;
-            }
-            card.innerHTML = `<div class="doc-name">${window.getFileIcon(doc.name)} ${ocrBtn} ${doc.name}</div>`;
+            if (Object.keys(doc.counts).length > 0) {
+                const card = document.createElement('div');
+                card.className = 'doc-card' + (isActive ? ' active' : '');
+                card.dataset.url = doc.url;
+                card.dataset.type = type;
+                card.onclick = () => { window.setActiveCard(card); window.loadDocument(doc.url); window.closeMobileSidebar(); };
+                card.innerHTML = `<div class="doc-name">${window.getFileIcon(doc.name)} ${doc.name}</div>`;
 
-            if (window.showOcrButtons) {
-                const ocrBtnElement = card.querySelector('.ocr-btn');
-                if (ocrBtnElement) {
-                    ocrBtnElement.onclick = (e) => {
-                        e.stopPropagation();
-                        const enabled = window.toggleOcr(doc.url);
-                        if (enabled) {
-                            ocrBtnElement.classList.add('ocr-enabled');
-                            window.loadDocument(doc.url);
-                        } else {
-                            ocrBtnElement.classList.remove('ocr-enabled');
+                const grid = document.createElement('div');
+                grid.className = 'badge-grid';
+
+                window.KEYWORDS.forEach(k => {
+                    const count = doc.counts[k] || 0;
+                    if (count > 0) {
+                        const b = document.createElement('div');
+                        b.className = 'badge';
+                        b.dataset.keyword = k;
+                        b.dataset.count = count;
+                        b.textContent = `${k}: ${count}`;
+                        b.onclick = (e) => {
+                            e.stopPropagation();
+                            window.setActiveCard(card);
+                            window.closeMobileSidebar();
                             if (window.currentDocUrl === doc.url) {
-                                window.loadDocument(doc.url);
-                            }
-                        }
-                    };
-                }
-
-                const ocrEnabled = window.isOcrEnabled(doc.url);
-                if (ocrEnabled) {
-                    const btn = card.querySelector('.ocr-btn');
-                    if (btn) btn.classList.add('ocr-enabled');
-                }
-            }
-
-            const grid = document.createElement('div');
-            grid.className = 'badge-grid';
-
-            window.KEYWORDS.forEach(k => {
-                const count = doc.counts[k] || 0;
-                if (count > 0) {
-                    const b = document.createElement('div');
-                    b.className = 'badge';
-                    b.dataset.keyword = k;
-                    b.dataset.count = count;
-                    b.textContent = `${k}: ${count}`;
-                    b.onclick = (e) => {
-                        e.stopPropagation();
-                        window.setActiveCard(card);
-                        window.closeMobileSidebar();
-                        if (window.currentDocUrl === doc.url) {
-                            if (type === 'pdf') {
-                                window.cycleSearch(k);
+                                if (type === 'pdf') {
+                                    window.cycleSearch(k);
+                                } else {
+                                    window.cycleDocSearch(k);
+                                }
                             } else {
-                                window.cycleDocSearch(k);
+                                window.loadDocument(doc.url, k);
                             }
-                        } else {
-                            window.loadDocument(doc.url, k);
-                        }
-                    };
-                    grid.appendChild(b);
-                }
-            });
-            card.appendChild(grid);
-            fragment.appendChild(card);
+                        };
+                        grid.appendChild(b);
+                    }
+                });
+                card.appendChild(grid);
+                resultsArea.appendChild(card);
+            } else {
+                const card = document.createElement('div');
+                card.className = 'doc-card doc-card-minimal';
+                card.dataset.url = doc.url;
+                card.dataset.type = type;
+                card.onclick = () => { window.setActiveCard(card); window.loadDocument(doc.url); window.closeMobileSidebar(); };
+                card.innerHTML = `<div class="doc-name">${window.getFileIcon(doc.name)} ${doc.name}</div>`;
+                resultsArea.appendChild(card);
+            }
         });
         
-        resultsArea.appendChild(fragment);
+        if (docs.length === 0) {
+            resultsArea.innerHTML = '<h1 class="status-msg">&#10548;</h1><h1 class="status-msg">Drop a folder to begin scanning</h1>';
+        }
     }
 };
 
@@ -992,7 +959,7 @@ window.setActiveCard = function(card) {
 
 window.setActiveCardFromUrl = function(url) {
     document.querySelectorAll('.doc-card').forEach(c => c.classList.remove('active'));
-    const card = document.querySelector(`.doc-card[data-url="${url}"]`);
+    const card = document.querySelector(`.doc-card[data-url="${CSS.escape(url)}"]`);
     if (card) card.classList.add('active');
     
     document.querySelectorAll('.tree-item').forEach(item => {
@@ -1203,6 +1170,7 @@ window.getTouchDist = function(e) {
 // ========== UPDATE FUNCTIONS ==========
 
 window.updateStats = function() {
+    if (window._verboseInterval) return; // don't overwrite verbose status
     if (window.totalMatchesFound > 0) {
         statusBar.textContent = `${window.totalMatchesFound} matches across ${window.totalDocsFound} document${window.totalDocsFound !== 1 ? 's' : ''}`;
     } else if (window.totalDocsFound > 0) {
@@ -1237,7 +1205,7 @@ window.updateSidebarBadge = function() {
 window.updateProgressMainThread = function() {
     window.processed++;
     progressBar.style.width = `${Math.round((window.processed / window.totalFiles) * 100)}%`;
-    
+
     if (window.processed === window.totalFiles) {
         window.renderResultsArea();
         if (window.totalMatchesFound === 0) {
@@ -1248,25 +1216,14 @@ window.updateProgressMainThread = function() {
     }
 };
 
+// Set default status bar message
+statusBar.textContent = 'Ready';
+
 // ========== EVENT LISTENERS ==========
 
 window.setupEventListeners = function() {
     window.addEventListener('resize', window.checkMobileLayout);
     document.addEventListener('DOMContentLoaded', window.checkMobileLayout);
-
-    // Persistent listener for closing settings menu on outside click
-    document.addEventListener('click', (e) => {
-        if (!window.settingsOpen) return;
-        if (window.settingsJustToggled) {
-            window.settingsJustToggled = false;
-            return;
-        }
-        const menu = document.getElementById('settingsMenu');
-        const btn = document.getElementById('settingsBtn');
-        if (menu && !menu.contains(e.target) && e.target !== btn) {
-            window.closeSettingsMenu();
-        }
-    });
 
     viewerScroll.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {

@@ -28,8 +28,20 @@ window.loadDocxDoc = function(fileUrl, keyword = "") {
 
     (async () => {
         try {
-            const cached = window.docContentCache[fileUrl];
+            let cached = window.docContentCache[fileUrl];
+            if (!cached) {
+                window.loaderFilename.textContent = 'Re-scanning DOCX...';
+                const blobUrl = window.objectUrls.find(url => url === fileUrl);
+                if (blobUrl) {
+                    const response = await fetch(blobUrl);
+                    const arrayBuffer = await response.arrayBuffer();
+                    const fileName = window.docDataCache[fileUrl]?.name || 'Document';
+                    await window.extractDocText(arrayBuffer, fileName, fileUrl, null);
+                    cached = window.docContentCache[fileUrl];
+                }
+            }
             if (!cached) throw new Error('Document not found in cache');
+            cached._lastAccess = Date.now();
 
             window.loaderProgressFill.style.width = '70%';
             window.loaderStatus.textContent = 'Rendering...';

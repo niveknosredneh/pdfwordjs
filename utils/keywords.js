@@ -70,6 +70,7 @@ async function loadKeywords() {
     };
 
     window.currentListName = currentListName;
+    window.switchKeywordList = switchKeywordList;
     window.isCustomList = isCustomList;
     window.createList = createList;
     window.updateList = updateList;
@@ -141,6 +142,7 @@ function switchKeywordList(listName) {
     currentListName = listName;
     window.KEYWORDS = KEYWORD_LISTS[listName];
     localStorage.setItem('tender_keywords', JSON.stringify(window.KEYWORDS));
+    window.clearKeywordRegexCache();
     
     return true;
 }

@@ -103,14 +103,25 @@
         window.statusBar.textContent = '';
 
         if (window.objectUrls) {
-            window.objectUrls.forEach(url => URL.revokeObjectURL(url));
+            window.objectUrls.forEach(url => {
+                URL.revokeObjectURL(url);
+                const pdfEntry = window.docTextCache[url];
+                if (pdfEntry) {
+                    window.totalCacheSize -= pdfEntry._size;
+                    delete window.docTextCache[url];
+                }
+                const docxEntry = window.docContentCache[url];
+                if (docxEntry) {
+                    window.totalCacheSize -= docxEntry._size;
+                    delete window.docContentCache[url];
+                }
+            });
         }
         window.objectUrls = [];
         window.totalMatchesFound = 0;
         window.totalDocsFound = 0;
         window.docDataCache = {};
-        window.docContentCache = {};
-        window.docTextCache = {};
+        window.totalCacheSize = 0;
         if (window.expandedTreeItems) {
             window.expandedTreeItems.clear();
         }

@@ -37,8 +37,9 @@ window.setupVirtualPages = async function() {
         placeholder.className = 'page-placeholder';
         placeholder.id = 'page-' + pageNum;
         placeholder.dataset.pageNum = pageNum;
-        placeholder.style.width = viewport.width + 'px';
-        placeholder.style.height = viewport.height + 'px';
+        // Set CSS custom properties for responsive sizing via --pdf-scale
+        placeholder.style.setProperty('--base-w', viewport.width);
+        placeholder.style.setProperty('--base-h', viewport.height);
         placeholder.textContent = `Page ${pageNum}`;
         placeholders.push(placeholder);
     }
@@ -139,20 +140,17 @@ window.renderPageNow = async function(pageNum, forceScale = null) {
     const renderScale = forceScale || window.currentScale;
     const dpr = window.devicePixelRatio || 1;
     const effectiveScale = renderScale * dpr;
-    
+
     if (window.renderedPages.has(pageNum) && !forceScale) {
         return;
     }
-    
+
     if (!window.pdfDoc) return;
-    
-    window.renderedPages.add(pageNum);
-    window.renderedScales[pageNum] = Math.max(window.renderedScales[pageNum] || 0, renderScale);
 
     try {
         const page = await window.pdfDoc.getPage(pageNum);
         const viewport = page.getViewport({ scale: effectiveScale });
-     
+
         const el = document.getElementById('page-' + pageNum);
         if (!el) return;
 
@@ -160,9 +158,11 @@ window.renderPageNow = async function(pageNum, forceScale = null) {
         const displayHeight = viewport.height / dpr;
 
         el.className = 'pdf-page';
-        el.textContent = '';
-        el.style.width = displayWidth + 'px';
-        el.style.height = displayHeight + 'px';
+        el.innerHTML = '<div class="page-loading"><div class="spinner"></div>Loading...</div>';
+        // Set CSS custom properties for responsive sizing via --pdf-scale
+        const vp1 = page.getViewport({ scale: 1.0 });
+        el.style.setProperty('--base-w', vp1.width);
+        el.style.setProperty('--base-h', vp1.height);
 
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d', { alpha: false });
@@ -173,7 +173,6 @@ window.renderPageNow = async function(pageNum, forceScale = null) {
         canvas.dataset.scale = renderScale;
 
         // Use cached text if available from file processing
-        const vp = page.getViewport({ scale: 1.0 });
         if (!window.textPageCache[pageNum]) {
             const textContent = await page.getTextContent();
             let pageText = '';
@@ -187,18 +186,59 @@ window.renderPageNow = async function(pageNum, forceScale = null) {
                     height: item.height
                 });
             }
-            window.textPageCache[pageNum] = { text: pageText, viewport: vp, items: textItems };
-            window.pageHeights[pageNum] = vp.height;
+            window.textPageCache[pageNum] = { text: pageText, viewport: vp1, items: textItems };
+            window.pageHeights[pageNum] = vp1.height;
         }
-        
-        // Skip text layer rendering - it's expensive and not needed for search highlighting
+
         await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-        
+
+        // Now mark as rendered after successful render
+        window.renderedPages.add(pageNum);
+        window.renderedScales[pageNum] = Math.max(window.renderedScales[pageNum] || 0, renderScale);
+
         const existingCanvas = el.querySelector('canvas');
         if (existingCanvas) {
             existingCanvas.remove();
         }
+        el.innerHTML = '';
         el.appendChild(canvas);
+
+        // Create text layer for text selection
+        const existingTextLayer = el.querySelector('.textLayer');
+        if (existingTextLayer) {
+            existingTextLayer.remove();
+        }
+
+        const textLayer = document.createElement('div');
+        textLayer.className = 'textLayer';
+
+        const textContent = window.textPageCache[pageNum];
+        if (textContent && textContent.items) {
+            for (const item of textContent.items) {
+                const span = document.createElement('span');
+                span.textContent = item.text;
+
+                const transform = item.transform;
+                const scale = renderScale;
+
+                const x = transform[4] * scale;
+                const y = transform[5] * scale;
+                const fontSize = Math.sqrt(transform[0]*transform[0] + transform[1]*transform[1]) * scale;
+
+                span.style.position = 'absolute';
+                span.style.left = x + 'px';
+                span.style.top = (displayHeight - y - fontSize) + 'px';
+                span.style.fontSize = fontSize + 'px';
+                span.style.fontFamily = 'sans-serif';
+                span.style.whiteSpace = 'pre';
+                span.style.color = 'transparent';
+
+                textLayer.appendChild(span);
+            }
+        }
+
+        el.style.position = 'relative';
+        el.appendChild(textLayer);
 
         if (window.searchResults.length > 0) {
             window.renderHighlightsForPage(pageNum);
@@ -223,24 +263,20 @@ window.setZoom = function(newScale, force = false) {
     window.currentScale = clampedScale;
     window.updateZoomDisplay();
 
+    // Use CSS custom property for scale - this avoids DOM thrashing
+    document.documentElement.style.setProperty('--pdf-scale', clampedScale);
+
+    // Only resize canvases for rendered pages (they are bitmaps that need re-rendering)
     for (let i = 1; i <= window.totalPages; i++) {
         const el = document.getElementById('page-' + i);
         if (!el) continue;
+        const canvas = el.querySelector('canvas');
+        if (!canvas) continue;
         const baseH = window.pageHeights[i] || 800;
         const cached = window.textPageCache[i];
         const baseW = cached ? cached.viewport.width : 600;
-        el.style.width = (baseW * window.currentScale) + 'px';
-        el.style.height = (baseH * window.currentScale) + 'px';
-        const canvas = el.querySelector('canvas');
-        if (canvas) {
-            canvas.style.width = (baseW * window.currentScale) + 'px';
-            canvas.style.height = (baseH * window.currentScale) + 'px';
-        }
-        const textLayer = el.querySelector('.textLayer');
-        if (textLayer) {
-            textLayer.style.width = (baseW * window.currentScale) + 'px';
-            textLayer.style.height = (baseH * window.currentScale) + 'px';
-        }
+        canvas.style.width = (baseW * clampedScale) + 'px';
+        canvas.style.height = (baseH * clampedScale) + 'px';
     }
 
     window.renderedPages.clear();

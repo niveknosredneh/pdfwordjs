@@ -7,9 +7,9 @@ window.textPageCache = {};
 
 window.precomputeAllSearches = async function() {
     if (window.searchCache._deduplicated) return;
-    
+
     const combinedRegex = window.getKeywordRegex(window.KEYWORDS);
-    
+
     for (let pageNum = 1; pageNum <= window.totalPages; pageNum++) {
         const cached = window.textPageCache[pageNum];
         if (!cached) continue;
@@ -29,7 +29,7 @@ window.precomputeAllSearches = async function() {
             if (!/[a-zA-Z]/.test(match[0])) continue;
             const lower = match[0].toLowerCase();
             const canonical = window.KEYWORDS.find(k => k.toLowerCase() === lower) || lower;
-            
+
             if (window.searchCache[canonical] === undefined) {
                 window.searchCache[canonical] = [];
             }
@@ -82,7 +82,7 @@ window.precomputeAllSearches = async function() {
             }
         }
     }
-    
+
     window.searchCache._deduplicated = true;
     window.populateKeywordSelect();
 };
@@ -232,6 +232,7 @@ window.showSearchResults = function() {
         window.populateKeywordSelect();
         window.updateSidebarBadge();
         window.updateHeatmap();
+        window.startPrerender();
         window.goToMatch(0);
     } else {
         window.navGroup.classList.remove('active');
@@ -312,38 +313,6 @@ window.clearHighlights = function() {
     window.viewer.querySelectorAll('.highlight-mark').forEach(el => el.remove());
 };
 
-window.goToMatch = function(index) {
-    if (!window.searchResults.length) return;
-
-    window.currentMatchIndex = ((index % window.searchResults.length) + window.searchResults.length) % window.searchResults.length;
-    const result = window.searchResults[window.currentMatchIndex];
-
-    if (window.currentPage !== result.page) {
-        window.currentPage = result.page;
-        window.updatePageInfo();
-    }
-
-    const pageEl = document.getElementById('page-' + result.page);
-    if (!pageEl) return;
-
-    const pageTop = pageEl.offsetTop;
-    const scrollContainer = window.viewerScroll;
-    const targetTop = pageTop + (result.y * window.currentScale);
-
-    scrollContainer.scrollTo({
-        top: targetTop - 50,
-        behavior: window.smoothScrollEnabled ? 'smooth' : 'auto'
-    });
-
-    window.matchInput.value = window.currentMatchIndex + 1;
-    window.updateSidebarBadge();
-
-    const allMarks = window.viewer.querySelectorAll('.highlight-mark');
-    allMarks.forEach((mark, i) => {
-        mark.classList.toggle('current', i === window.currentMatchIndex);
-    });
-};
-
 window.updateHeatmap = function() {
     const container = window.viewer.querySelector('.heatmap-canvas-container');
     if (!container) return;
@@ -351,15 +320,6 @@ window.updateHeatmap = function() {
 
     const allKeywords = Object.keys(window.searchCache).filter(k => !k.startsWith('_'));
     if (allKeywords.length === 0) return;
-
-    const pageResults = {};
-    Object.keys(window.searchCache).forEach(k => {
-        if (k.startsWith('_')) return;
-        window.searchCache[k].forEach(r => {
-            if (!pageResults[r.page]) pageResults[r.page] = 0;
-            pageResults[r.page]++;
-        });
-    });
 
     const canvas = document.createElement('canvas');
     canvas.className = 'heatmap-canvas';

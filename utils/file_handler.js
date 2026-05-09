@@ -5,6 +5,7 @@ window.getFileType = function(filename) {
     if (lower.endsWith('.pdf')) return 'pdf';
     if (lower.endsWith('.docx')) return 'docx';
     if (lower.endsWith('.doc')) return 'doc';
+    if (lower.endsWith('.zip')) return 'zip';
     return null;
 };
 
@@ -15,6 +16,9 @@ window.getFileIcon = function(filename) {
     }
     if (type === 'docx' || type === 'doc') {
         return '<img src="icons/docx.svg" width="18" height="18" alt="docx">';
+    }
+    if (type === 'zip') {
+        return '<img src="icons/zip.svg" width="18" height="18" alt="zip">';
     }
     return '<svg width="18" height="18" viewBox="0 0 24 24" fill="#757575"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/></svg>';
 };
@@ -572,7 +576,7 @@ window.rescanWithNewKeywords = async function() {
         const docCounts = result.counts || {};
         const totalMatches = result.totalMatches || 0;
 
-        const activeCard = window.viewer.querySelector('.doc-card.active, .tree-header.active')?.closest('.doc-card') || window.viewer.querySelector('.doc-card.active');
+        const activeCard = window.viewer.querySelector('.doc-card.active, .file.active')?.closest('.doc-card') || window.viewer.querySelector('.doc-card.active');
         if (activeCard) {
             const cardName = activeCard.querySelector('.doc-name').textContent;
             const badgeGrid = activeCard.querySelector('.badge-grid');

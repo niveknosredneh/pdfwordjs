@@ -746,106 +746,128 @@ window.renderNoMatchCard = function(fileName, url, file) {
     card.innerHTML = `<div class="doc-name">${window.getFileIcon(fileName)} ${fileName}</div>`;
 };
 
-window.renderTreeItem = function(doc) {
-    const item = document.createElement('div');
-    item.className = 'tree-item';
-    
-    const totalMatches = Object.values(doc.counts).reduce((a, b) => a + b, 0);
-    const isExpanded = window.expandedTreeItems.has(doc.url);
-    const isActive = doc.url === window.currentDocUrl;
-    
-    const header = document.createElement('div');
-    header.className = 'tree-header' + (isActive ? ' active' : '');
+window.buildTreeData = function() {
+    const root = { name: '', children: {}, docs: [] };
 
-    const arrow = document.createElement('span');
-    arrow.className = 'tree-arrow';
-    arrow.textContent = totalMatches > 0 ? (isExpanded ? '▼' : '▶') : '│';
-    arrow.onclick = (e) => {
-        e.stopPropagation();
-        if (totalMatches > 0) {
-            if (window.expandedTreeItems.has(doc.url)) {
-                window.expandedTreeItems.delete(doc.url);
-            } else {
-                window.expandedTreeItems.add(doc.url);
+    Object.values(window.docDataCache).forEach(doc => {
+        const folder = doc.folder || '';
+        const parts = folder ? folder.split('/').filter(Boolean) : [];
+        let current = root;
+
+        for (const part of parts) {
+            if (!current.children[part]) {
+                current.children[part] = { name: part, children: {}, docs: [] };
             }
-            window.renderResultsArea();
+            current = current.children[part];
         }
-    };
-    header.appendChild(arrow);
 
-    const fileIcon = document.createElement('span');
-    fileIcon.className = 'tree-file-icon';
-    fileIcon.innerHTML = window.getFileIcon(doc.name);
-    header.appendChild(fileIcon);
-    
-    const name = document.createElement('span');
-    name.className = 'tree-name';
-    name.textContent = doc.name;
-    header.appendChild(name);
-    
-    if (totalMatches > 0) {
-        const count = document.createElement('span');
-        count.className = 'tree-count';
-        count.textContent = totalMatches;
-        header.appendChild(count);
-    }
+        current.docs.push(doc);
+    });
 
-    header.onclick = () => {
-        if (totalMatches > 0) {
-            if (isExpanded) {
-                window.expandedTreeItems.delete(doc.url);
-            } else {
-                window.expandedTreeItems.add(doc.url);
-            }
-        }
-        window.setActiveCardFromUrl(doc.url);
-        window.loadDocument(doc.url);
-        window.closeMobileSidebar();
-        window.renderResultsArea();
-    };
+    return root;
+};
 
-    item.appendChild(header);
+window.renderTree = function(node, path = '') {
+    const ul = document.createElement('ul');
 
-    if (isExpanded && totalMatches > 0) {
-        const children = document.createElement('div');
-        children.className = 'tree-children';
+    const folderNames = Object.keys(node.children).sort();
+    for (const name of folderNames) {
+        const child = node.children[name];
+        const fullPath = path ? path + '/' + name : name;
 
-        window.KEYWORDS.forEach(k => {
-            const cnt = doc.counts[k] || 0;
-            if (cnt > 0) {
-                const child = document.createElement('div');
-                child.className = 'tree-child';
-                child.onclick = () => {
-                    if (doc.url === window.currentDocUrl) {
-                        const type = doc.type;
-                        if (type === 'pdf') {
-                            window.cycleSearch(k);
-                        } else {
-                            window.cycleDocSearch(k);
-                        }
-                    } else {
-                        window.loadDocument(doc.url, k);
-                    }
-                };
+        const li = document.createElement('li');
 
-                const kw = document.createElement('span');
-                kw.className = 'tree-child-kw';
-                kw.textContent = k;
-                child.appendChild(kw);
-                
-                const c = document.createElement('span');
-                c.className = 'tree-child-count';
-                c.textContent = cnt;
-                child.appendChild(c);
-                
-                children.appendChild(child);
+        const folderSpan = document.createElement('span');
+        folderSpan.className = 'folder open';
+        folderSpan.dataset.path = fullPath;
+        folderSpan.innerHTML = '<img src="icons/folder.svg" width="16" height="16" alt="folder"> ' + name;
+
+        folderSpan.addEventListener('click', function(e) {
+            e.stopPropagation();
+            this.classList.toggle('open');
+            const nested = this.nextElementSibling;
+            if (nested && nested.classList.contains('tree-nested')) {
+                nested.classList.toggle('expanded');
             }
         });
-        
-        item.appendChild(children);
+
+        li.appendChild(folderSpan);
+
+        const childUl = window.renderTree(child, fullPath);
+        childUl.className = 'tree-nested expanded';
+        li.appendChild(childUl);
+
+        ul.appendChild(li);
     }
-    
-    return item;
+
+    const sortedDocs = [...node.docs].sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const doc of sortedDocs) {
+        const li = document.createElement('li');
+        li.className = 'tree-file-item';
+        li.dataset.url = doc.url;
+
+        const fileSpan = document.createElement('span');
+        fileSpan.className = 'file';
+        if (doc.url === window.currentDocUrl) fileSpan.classList.add('active');
+
+        fileSpan.innerHTML = window.getFileIcon(doc.name);
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'file-name';
+        nameSpan.textContent = doc.name;
+        fileSpan.appendChild(nameSpan);
+
+        const totalMatches = Object.values(doc.counts).reduce((a, b) => a + b, 0);
+        if (totalMatches > 0) {
+            const countSpan = document.createElement('span');
+            countSpan.className = 'tree-count';
+            countSpan.textContent = totalMatches;
+            fileSpan.appendChild(countSpan);
+        }
+
+        fileSpan.addEventListener('click', function(e) {
+            e.stopPropagation();
+            window.expandedTreeItems.clear();
+            window.expandedTreeItems.add(doc.url);
+            window.loadDocument(doc.url);
+            window.closeMobileSidebar();
+            window.renderResultsArea();
+        });
+
+        li.appendChild(fileSpan);
+
+        const isExpanded = window.expandedTreeItems.has(doc.url);
+        if (totalMatches > 0) {
+            const kwUl = document.createElement('ul');
+            kwUl.className = 'tree-nested' + (isExpanded ? ' expanded' : '');
+
+            window.KEYWORDS.forEach(k => {
+                const cnt = doc.counts[k] || 0;
+                if (cnt > 0) {
+                    const kwLi = document.createElement('li');
+                    kwLi.className = 'tree-child';
+                    kwLi.onclick = (e) => {
+                        e.stopPropagation();
+                        if (doc.url === window.currentDocUrl) {
+                            if (doc.type === 'pdf') window.cycleSearch(k);
+                            else window.cycleDocSearch(k);
+                        } else {
+                            window.loadDocument(doc.url, k);
+                        }
+                    };
+                    kwLi.textContent = k + ': ' + cnt;
+                    kwUl.appendChild(kwLi);
+                }
+            });
+
+            li.appendChild(kwUl);
+        }
+
+        ul.appendChild(li);
+    }
+
+    return ul;
 };
 
 window.renderResultsArea = function() {
@@ -853,43 +875,12 @@ window.renderResultsArea = function() {
     resultsArea.className = 'results-area' + (window.currentLayout === 'tree' ? ' tree-mode' : '');
     
     if (window.currentLayout === 'tree') {
-        const docs = Object.values(window.docDataCache);
-        
-        const folders = {};
-        docs.forEach(doc => {
-            const folder = doc.folder || '';
-            if (!folders[folder]) {
-                folders[folder] = [];
-            }
-            folders[folder].push(doc);
-        });
-        
-        const sortedFolders = Object.keys(folders).sort((a, b) => {
-            if (a === '') return 1;
-            if (b === '') return -1;
-            return a.localeCompare(b);
-        });
-        sortedFolders.forEach(folder => {
-            const folderDocs = folders[folder];
-            
-            if (!folder) {
-                const header = document.createElement('div');
-                header.className = 'tree-folder-header';
-                header.textContent = 'Files in root';
-                resultsArea.appendChild(header);
-            } else {
-                const header = document.createElement('div');
-                header.className = 'tree-folder-header';
-                header.textContent = folder;
-                resultsArea.appendChild(header);
-            }
+        const treeData = window.buildTreeData();
+        const treeUl = window.renderTree(treeData);
+        treeUl.id = 'file-tree';
+        resultsArea.appendChild(treeUl);
 
-            folderDocs.sort((a, b) => a.name.localeCompare(b.name)).forEach(doc => {
-                resultsArea.appendChild(window.renderTreeItem(doc));
-            });
-        });
-        
-        if (docs.length === 0) {
+        if (Object.keys(window.docDataCache).length === 0) {
             resultsArea.innerHTML = '<h1 class="status-msg">&#10548;</h1><h1 class="status-msg">Drop a folder to begin scanning</h1>';
         }
     } else {
@@ -961,16 +952,12 @@ window.setActiveCardFromUrl = function(url) {
     document.querySelectorAll('.doc-card').forEach(c => c.classList.remove('active'));
     const card = document.querySelector(`.doc-card[data-url="${CSS.escape(url)}"]`);
     if (card) card.classList.add('active');
-    
-    document.querySelectorAll('.tree-item').forEach(item => {
-        const header = item.querySelector('.tree-header');
-        if (header) header.classList.remove('active');
-    });
-    const treeItem = [...document.querySelectorAll('.tree-item')].find(item => {
-        return item.querySelector('.tree-name').textContent === window.docDataCache[url]?.name;
-    });
-    if (treeItem) {
-        treeItem.querySelector('.tree-header').classList.add('active');
+
+    document.querySelectorAll('.file.active').forEach(el => el.classList.remove('active'));
+    const fileItem = document.querySelector(`.tree-file-item[data-url="${CSS.escape(url)}"]`);
+    if (fileItem) {
+        const fileSpan = fileItem.querySelector('.file');
+        if (fileSpan) fileSpan.classList.add('active');
     }
 
     if (window.currentLayout === 'tree') {

@@ -263,132 +263,131 @@ body {
 #viewerDropMsg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--grey-500); font-size: 1.1rem; text-align: center; pointer-events: none; opacity: 0.5; }
 
 .results-area { flex: 1; overflow-y: auto; padding: 12px; }
-.results-area.tree-mode { padding: 8px; }
+.results-area.tree-mode { padding: 4px 8px; }
 
-/* Tree layout - filesystem style */
-.tree-item {
-    margin-bottom: 2px;
+/* File tree layout */
+.sidebar ul {
+    list-style-type: none;
+    padding-left: 15px;
+    margin: 0;
 }
 
-.tree-folder-header {
-    font-size: 0.7rem;
-    color: var(--grey-500);
-    padding: 8px 4px 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    border-bottom: 1px solid var(--grey-700);
-    margin-bottom: 6px;
-    margin-top: 4px;
+#file-tree {
+    padding-left: 0;
 }
 
-.tree-header {
+.file-tree li {
+    margin: 0;
+    padding: 0;
+    user-select: none;
+}
+
+/* Nested folder contents (hidden by default) */
+.tree-nested {
+    display: none;
+}
+
+.tree-nested.expanded {
+    display: block;
+}
+
+/* Folder style */
+.folder {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 8px;
-    background: var(--grey-800);
-    border: 1px solid var(--grey-700);
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.15s;
-    margin-bottom: 2px;
-}
-
-.tree-header:hover {
-    background: var(--green-bg);
-    border-color: var(--green);
-}
-
-.tree-header.active {
-    background: var(--green-bg);
-    border-color: var(--green);
-    box-shadow: 0 0 0 1px var(--green);
-}
-
-.tree-arrow {
-    font-size: 0.85rem;
-    color: var(--grey-400);
-    width: 18px;
-    height: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
+    gap: 3px;
+    padding: 2px 4px;
     cursor: pointer;
     border-radius: 3px;
-    transition: background 0.15s, color 0.15s;
+    font-size: 0.85rem;
+    color: var(--grey-300);
+    transition: background 0.15s;
+    white-space: nowrap;
 }
 
-.tree-arrow:hover {
-    background: var(--grey-700);
-    color: var(--green);
-}
-    color: var(--green);
-}
-
-.tree-file-icon {
-    font-size: 0.9rem;
-    width: 16px;
+.folder::before {
+    content: "▶";
+    display: inline-block;
+    margin-right: 4px;
+    font-size: 0.65em;
+    transition: transform 0.2s ease;
+    color: var(--grey-500);
     flex-shrink: 0;
-    text-align: center;
 }
 
-.tree-name {
-    flex: 1;
+.folder.open::before {
+    transform: rotate(90deg);
+}
+
+.folder:hover {
+    background: var(--grey-700);
+}
+
+/* File style */
+.file {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px;
+    cursor: pointer;
+    border-radius: 3px;
     font-size: 0.82rem;
     color: var(--grey-300);
+    transition: background 0.15s;
     white-space: nowrap;
+}
+
+.file:hover {
+    background: var(--green-bg);
+}
+
+.file.active {
+    background: var(--green-bg);
+    border-left: 2px solid var(--green);
+    padding-left: 4px;
+}
+
+.file-name {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.tree-count {
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--green);
-    background: var(--green-bg);
-    padding: 2px 6px;
-    border-radius: 10px;
-    min-width: 20px;
-    text-align: center;
+.file img, .file svg {
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
 }
 
-.tree-children {
-    margin-left: 16px;
-    margin-top: 2px;
-    margin-bottom: 6px;
-    padding-left: 8px;
-    border-left: 1px solid var(--grey-700);
+/* Match count badge on files */
+.tree-count {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--green);
+    background: var(--green-bg);
+    padding: 1px 5px;
+    border-radius: 8px;
+    min-width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
+/* Keyword child items */
 .tree-child {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 5px 10px;
-    background: var(--grey-900);
-    border: 1px solid var(--grey-700);
-    border-radius: 3px;
-    margin-bottom: 2px;
+    padding: 2px 6px 2px 6px;
+    font-size: 0.78rem;
+    color: var(--grey-400);
     cursor: pointer;
-    transition: all 0.15s;
+    border-radius: 3px;
+    transition: background 0.15s;
+    list-style: none;
 }
 
 .tree-child:hover {
     background: var(--green-bg);
-    border-color: var(--green);
-}
-
-.tree-child-kw {
-    font-size: 0.85rem;
-    color: var(--grey-400);
-}
-
-.tree-child-count {
-    font-size: 0.7rem;
-    color: var(--grey-500);
-    font-weight: 600;
+    color: var(--green-light);
 }
 
 .doc-card {
@@ -916,28 +915,22 @@ body {
         width: max-content;
     }
 
-    .tree-header {
-        padding: 5px 6px;
+    .tree-nested {
+        padding-left: 10px;
     }
 
-    .tree-name {
+    .folder, .file {
         font-size: 0.78rem;
+        padding: 2px 4px;
     }
 
     .tree-count {
-        font-size: 0.65rem;
+        font-size: 0.6rem;
         padding: 1px 4px;
     }
 
-    .tree-children {
-        margin-left: 8px;
-    }
-
     .tree-child {
-        padding: 3px 6px;
-    }
-
-    .tree-child-kw {
-        font-size: 0.7rem;
+        font-size: 0.72rem;
+        padding: 2px 6px 2px 8px;
     }
 }

@@ -2,7 +2,9 @@ import JSZip from 'jszip';
 import * as mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+const scriptUrl = document.currentScript && document.currentScript.src;
+const basePath = scriptUrl ? scriptUrl.substring(0, scriptUrl.lastIndexOf('/') + 1) : './';
+pdfjsLib.GlobalWorkerOptions.workerSrc = basePath + 'pdf.worker.min.js';
 
 window.pdfjsLib = pdfjsLib;
 window.JSZip = JSZip;

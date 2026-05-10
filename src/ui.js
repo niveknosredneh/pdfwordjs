@@ -14,7 +14,6 @@ let searchOverlayInput = null;
 let searchOverlayResults = null;
 let customSearchResults = [];
 let customSearchIndex = 0;
-let heatmapContainer = null;
 
 export function clearSearch() {
     state.activeKeyword = '';
@@ -106,54 +105,7 @@ function initSearchOverlay() {
     searchOverlayInput.addEventListener('input', () => performCustomSearch(searchOverlayInput.value));
 }
 
-function updateHeatmap() {
-    let existing = document.getElementById('heatmapContainer');
-    if (!existing) {
-        const style = document.createElement('style');
-        style.id = 'heatmapStyle';
-        style.textContent = '.hm{position:absolute;left:2px;width:10px;height:3px;background:#6b9e3a;border-radius:1px;pointer-events:none}.hm-c{background:#fc0;box-shadow:0 0 4px #fc0}';
-        document.head.appendChild(style);
-
-        heatmapContainer = document.createElement('div');
-        heatmapContainer.id = 'heatmapContainer';
-        heatmapContainer.style.cssText = 'position:fixed;right:0;top:60px;bottom:60px;width:18px;pointer-events:none;z-index:99999;';
-        document.body.appendChild(heatmapContainer);
-        existing = heatmapContainer;
-    }
-
-    if (!state.searchResults || !state.searchResults.length) {
-        existing.style.display = 'none';
-        return;
-    }
-
-    existing.style.display = 'block';
-
-    const pageOffsets = {};
-    let docH = 0;
-    for (let i = 1; i <= state.totalPages; i++) {
-        pageOffsets[i] = docH;
-        docH += ((state.pageHeights[i] || 792) * state.currentScale) + 32;
-    }
-
-    if (docH < 50) return;
-
-    const n = state.searchResults.length;
-    const currIdx = state.currentMatchIndex;
-    const viewH = existing.clientHeight || 500;
-
-    let html = '';
-    for (let i = 0; i < n; i++) {
-        const r = state.searchResults[i];
-        if (!r || !r.page) continue;
-        const top = pageOffsets[r.page] || 0;
-        const y = top + (r.y || 0) * state.currentScale;
-        const pos = Math.max(0, Math.min(viewH - 4, (y / docH) * viewH));
-        const cls = i === currIdx ? 'hm-c' : 'hm';
-        html += '<div class="' + cls + '" style="top:' + pos + 'px"></div>';
-    }
-
-    existing.innerHTML = html;
-}
+function updateHeatmap() {}
 
 export function showSearchOverlay() {
     if (!searchOverlay) initSearchOverlay();

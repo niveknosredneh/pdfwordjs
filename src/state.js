@@ -53,6 +53,5 @@ export const state = {
     customSearchResults: [],
     customSearchIndex: 0,
 
-    heatmapContainer: null,
     _verboseRAF: null,
 };

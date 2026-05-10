@@ -8,6 +8,53 @@ state.currentMatchIndex = -1;
 state.searchCache = {};
 state.textPageCache = {};
 
+function buildOffsetMap(textItems) {
+    const offsets = [];
+    let acc = 0;
+    for (const item of textItems) {
+        offsets.push(acc);
+        acc += item.text.length;
+    }
+    return { offsets, length: acc };
+}
+
+function findStartItem(pos, offsets, items) {
+    let lo = 0, hi = offsets.length - 1;
+    while (lo < hi) {
+        const mid = (lo + hi + 1) >>> 1;
+        if (offsets[mid] <= pos) lo = mid;
+        else hi = mid - 1;
+    }
+    return { item: items[lo], charStart: offsets[lo], index: lo };
+}
+
+function findEndItem(endPos, startIdx, offsets, items) {
+    let lo = startIdx, hi = offsets.length - 1;
+    while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        const itemEnd = offsets[mid] + items[mid].text.length;
+        if (endPos <= itemEnd) hi = mid;
+        else lo = mid + 1;
+    }
+    return { item: items[lo], charStart: offsets[lo] };
+}
+
+function computeMatchCoords(matchStart, matchEnd, viewport, textItems, offsetMap) {
+    const start = findStartItem(matchStart, offsetMap.offsets, textItems);
+    const end = findEndItem(matchEnd, start.index, offsetMap.offsets, textItems);
+
+    const startCharFrac = start.item.text.length > 0
+        ? (matchStart - start.charStart) / start.item.text.length : 0;
+    const sx = start.item.transform[4] + startCharFrac * start.item.width;
+    const sy = viewport.height - (start.item.transform[5] + start.item.height);
+
+    const endCharFrac = end.item.text.length > 0
+        ? (matchEnd - end.charStart) / end.item.text.length : 1;
+    const endX = end.item.transform[4] + endCharFrac * end.item.width;
+
+    return { x: sx, y: sy, width: Math.max(endX - sx, 4), height: start.item.height };
+}
+
 export async function precomputeAllSearches() {
     if (state.searchCache._deduplicated) return;
 
@@ -22,7 +69,9 @@ export async function precomputeAllSearches() {
 
         if (!cached.items) await fetchPageItems(pageNum);
         const textItems = cached.items;
-        if (!textItems) continue;
+        if (!textItems || textItems.length === 0) continue;
+
+        const offsetMap = buildOffsetMap(textItems);
 
         let match;
         while ((match = combinedRegex.exec(pageText)) !== null) {
@@ -33,42 +82,8 @@ export async function precomputeAllSearches() {
 
             if (state.searchCache[canonical] === undefined) state.searchCache[canonical] = [];
 
-            const matchStart = match.index;
-            const matchEnd = match.index + match[0].length;
-            let charOffset = 0;
-            let startItem = null, endItem = null;
-            let startItemCharStart = 0, endItemCharStart = 0;
-
-            for (const item of textItems) {
-                const itemStart = charOffset;
-                const itemEnd = charOffset + item.text.length;
-
-                if (!startItem && matchStart >= itemStart && matchStart < itemEnd) {
-                    startItem = item;
-                    startItemCharStart = itemStart;
-                }
-                if (startItem && matchEnd > itemStart && matchEnd <= itemEnd) {
-                    endItem = item;
-                    endItemCharStart = itemStart;
-                    break;
-                }
-                charOffset = itemEnd;
-            }
-
-            if (startItem) {
-                const startCharFrac = startItem.text.length > 0 ? (matchStart - startItemCharStart) / startItem.text.length : 0;
-                const sx = startItem.transform[4] + startCharFrac * startItem.width;
-                const sy = viewport.height - (startItem.transform[5] + startItem.height);
-                const ei = endItem || startItem;
-                const eiCharStart = endItem ? endItemCharStart : startItemCharStart;
-                const endCharFrac = ei.text.length > 0 ? (matchEnd - eiCharStart) / ei.text.length : 1;
-                const endX = ei.transform[4] + endCharFrac * ei.width;
-
-                state.searchCache[canonical].push({
-                    page: pageNum, x: sx, y: sy,
-                    width: Math.max(endX - sx, 4), height: startItem.height
-                });
-            }
+            const coords = computeMatchCoords(match.index, match.index + match[0].length, viewport, textItems, offsetMap);
+            state.searchCache[canonical].push({ page: pageNum, ...coords });
         }
     }
 
@@ -93,47 +108,17 @@ async function computeSearchForQuery(query) {
 
         if (!cached.items) await fetchPageItems(pageNum);
         const textItems = cached.items;
-        if (!textItems) continue;
+        if (!textItems || textItems.length === 0) continue;
+
+        const offsetMap = buildOffsetMap(textItems);
 
         let match;
         while ((match = localRegex.exec(pageText)) !== null) {
             if (match[0].length < 3) continue;
             if (!/[a-zA-Z]/.test(match[0])) continue;
-            const matchStart = match.index;
-            const matchEnd = match.index + match[0].length;
-            let charOffset = 0;
-            let startItem = null, endItem = null;
-            let startItemCharStart = 0, endItemCharStart = 0;
 
-            for (const item of textItems) {
-                const itemStart = charOffset;
-                const itemEnd = charOffset + item.text.length;
-                if (!startItem && matchStart >= itemStart && matchStart < itemEnd) {
-                    startItem = item;
-                    startItemCharStart = itemStart;
-                }
-                if (startItem && matchEnd > itemStart && matchEnd <= itemEnd) {
-                    endItem = item;
-                    endItemCharStart = itemStart;
-                    break;
-                }
-                charOffset = itemEnd;
-            }
-
-            if (startItem) {
-                const startCharFrac = startItem.text.length > 0 ? (matchStart - startItemCharStart) / startItem.text.length : 0;
-                const sx = startItem.transform[4] + startCharFrac * startItem.width;
-                const sy = viewport.height - (startItem.transform[5] + startItem.height);
-                const ei = endItem || startItem;
-                const eiCharStart = endItem ? endItemCharStart : startItemCharStart;
-                const endCharFrac = ei.text.length > 0 ? (matchEnd - eiCharStart) / ei.text.length : 1;
-                const endX = ei.transform[4] + endCharFrac * ei.width;
-
-                results.push({
-                    page: pageNum, x: sx, y: sy,
-                    width: Math.max(endX - sx, 4), height: startItem.height
-                });
-            }
+            const coords = computeMatchCoords(match.index, match.index + match[0].length, viewport, textItems, offsetMap);
+            results.push({ page: pageNum, ...coords });
         }
     }
 
@@ -296,30 +281,4 @@ export function clearHighlights() {
     dom.viewer.querySelectorAll('.highlight-mark').forEach(el => el.remove());
 }
 
-export function renderPageHeatmaps() {
-    const container = dom.viewer.querySelector('.heatmap-canvas-container');
-    if (!container) return;
-    container.querySelectorAll('canvas').forEach(c => c.remove());
-
-    const allKeywords = Object.keys(state.searchCache).filter(k => !k.startsWith('_'));
-    if (allKeywords.length === 0) return;
-
-    const canvas = document.createElement('canvas');
-    canvas.className = 'heatmap-canvas';
-    canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;opacity:0.3';
-
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    allKeywords.forEach((keyword, ki) => {
-        const results = state.searchCache[keyword] || [];
-        if (results.length === 0) return;
-        const hue = (ki / allKeywords.length) * 360;
-        ctx.fillStyle = `hsla(${hue}, 80%, 50%, 0.4)`;
-        results.forEach(r => {
-            ctx.fillRect(r.x * state.currentScale, r.y * state.currentScale, r.width * state.currentScale, r.height * state.currentScale);
-        });
-    });
-
-    container.appendChild(canvas);
-}
+export function renderPageHeatmaps() {}

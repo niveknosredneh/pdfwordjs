@@ -243,7 +243,7 @@ async function processFiles(files) {
         fn.renderPlaceholderCard(file.name, url, file);
 
         try {
-            const arrayBuffer = await file.arrayBuffer();
+            const arrayBuffer = file._cachedBuffer || await file.arrayBuffer();
             const type = getFileType(file.name);
 
             if (type === 'pdf') {
@@ -331,22 +331,33 @@ async function extractAllFromZip(zipFile) {
     });
 
     const total = entries.length;
+    const concurrency = Math.min(navigator.hardwareConcurrency || 4, 8);
     const extracted = [];
     let done = 0;
 
-    for (const { path, entry } of entries) {
-        const blob = await entry.async('blob');
-        let mimeType = 'application/pdf';
-        const type = getFileType(path);
-        if (type === 'docx') mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-        else if (type === 'doc') mimeType = 'application/msword';
-        const file = new File([blob], path, { type: mimeType });
-        file.relativePath = path;
-        extracted.push(file);
+    function updateProgress() {
         done++;
         const pct = Math.round((done / total) * 100);
         dom.statusBar.textContent = pct + '% - Unzipping ' + zipFile.name + ': ' + done + '/' + total + ' files';
         dom.progressBar.style.width = pct + '%';
+    }
+
+    for (let i = 0; i < total; i += concurrency) {
+        const batch = entries.slice(i, i + concurrency);
+        const results = await Promise.all(batch.map(async ({ path, entry }) => {
+            const blob = await entry.async('blob');
+            return { blob, path, type: getFileType(path) };
+        }));
+        for (const { blob, path, type } of results) {
+            let mimeType = 'application/pdf';
+            if (type === 'docx') mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+            else if (type === 'doc') mimeType = 'application/msword';
+            const file = new File([blob], path, { type: mimeType });
+            file.relativePath = path;
+            file._cachedBuffer = await blob.arrayBuffer();
+            extracted.push(file);
+            updateProgress();
+        }
     }
 
     return extracted;

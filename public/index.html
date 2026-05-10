@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=no">
     <title>PDF Scanner</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="manifest.json">
-    <link rel="icon" href="icons/favicon.ico">
+    <link rel="stylesheet" href="../dist/style.css">
+    <link rel="manifest" href="../dist/manifest.json">
+    <link rel="icon" href="../dist/icons/favicon.ico">
         <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./service_worker.js')
+            navigator.serviceWorker.register('../dist/service_worker.js')
                 .then(reg => console.log('[App] Service Worker registered'))
                 .catch(err => console.error('[App] Service Worker failed:', err));
         }
@@ -45,10 +45,10 @@
 
     <div id="results" class="results-area">
         <h1 class="status-msg">
-        <img src="icons/folder.svg" width="32" height="32" alt="folder">
-        <img src="icons/pdf.svg" width="32" height="32" alt="pdf">
-        <img src="icons/docx.svg" width="32" height="32" alt="docx">
-        <img src="icons/zip.svg" width="32" height="32" alt="zip">
+        <img src="../dist/icons/folder.svg" width="32" height="32" alt="folder">
+        <img src="../dist/icons/pdf.svg" width="32" height="32" alt="pdf">
+        <img src="../dist/icons/docx.svg" width="32" height="32" alt="docx">
+        <img src="../dist/icons/zip.svg" width="32" height="32" alt="zip">
         </h1>
         <h2 class="status-msg">Drop here to begin scanning</h2>
     </div>
@@ -136,6 +136,6 @@
     </div>
 </div>
 
-    <script src="bundle.js"></script>
+    <script src="../dist/bundle.js"></script>
 </body>
 </html>

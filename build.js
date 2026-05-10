@@ -20,8 +20,10 @@ await esbuild.build({
 
 function copy(src, dest) { fs.cpSync(path.join(__dirname, src), path.join(dist, dest), { recursive: true }); }
 
-const assets = ['style.css', 'manifest.json', 'keywords.json', 'icons'];
-assets.forEach(a => copy('src/' + a, a));
+copy('src/style.css', 'style.css');
+copy('src/manifest.json', 'manifest.json');
+copy('keywords.json', 'keywords.json');
+copy('icons', 'icons');
 
 let html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 html = html.replaceAll('dist/', '');

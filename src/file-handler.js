@@ -254,6 +254,7 @@ async function processFiles(files) {
         } finally {
             stopVerboseStatus();
             updateProgressMainThread();
+            fn.updateStats();
         }
     }
 }

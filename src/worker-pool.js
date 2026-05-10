@@ -12,7 +12,7 @@ export class WorkerPool {
     init() {
         if (this.initialized) return;
         for (let i = 0; i < this.poolSize; i++) {
-            const worker = new Worker('utils/doc_processor_worker.js');
+            const worker = new Worker('src/doc_processor_worker.js');
             worker.onmessage = (e) => this._handleWorkerMessage(worker, e);
             worker.onerror = (err) => this._handleWorkerError(worker, err);
             this.workers.push(worker);

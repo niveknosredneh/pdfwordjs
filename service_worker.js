@@ -1,7 +1,8 @@
-const CACHE_NAME = 'kwpdf-v0.94';
+const CACHE_NAME = 'kwpdf-v0.95';
 const LOCAL_ASSETS = [
     './index.html',
-    './index.js',
+    './bundle.js',
+    './pdf.worker.min.js',
     './style.css',
     './keywords.json',
     './manifest.json',
@@ -11,15 +12,6 @@ const LOCAL_ASSETS = [
     './icons/docx.svg',
     './icons/zip.svg',
     './icons/github.svg',
-    './utils/keywords.js',
-    './utils/keyword_regex.js',
-    './utils/file_handler.js',
-    './utils/docx_engine.js',
-    './utils/pdf_search.js',
-    './utils/pdf_renderer.js',
-    './utils/pdf_loader.js',
-    './utils/state_handler.js',
-    './utils/ui.js'
 ];
 
 self.addEventListener('install', event => {

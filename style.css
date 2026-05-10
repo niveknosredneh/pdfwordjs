@@ -761,6 +761,16 @@ body {
     box-shadow: 0 10px 25px rgba(0,0,0,0.5);
 }
 
+#keywordManager .modal h3 {
+    color: var(--grey-200);
+    font-size: 1rem;
+}
+
+#keywordManager .list-info {
+    color: var(--grey-400);
+    font-size: 0.85rem;
+}
+
 #newListDialog { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10003; align-items: center; justify-content: center; }
 #newListDialog.show { display: flex; }
 #newListDialog .modal { background: var(--grey-800); padding: 24px; border-radius: 12px; width: 350px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }

@@ -1,0 +1,58 @@
+export const state = {
+    pdfDoc: null,
+    currentDocUrl: '',
+    currentDocType: 'pdf',
+    totalPages: 0,
+    currentPage: 1,
+    currentScale: 1.0,
+    isNavigating: false,
+
+    activeKeyword: '',
+    searchResults: [],
+    currentMatchIndex: -1,
+    searchCache: {},
+
+    docSearchResults: [],
+    docCurrentMatchIndex: -1,
+    docOriginalHtml: null,
+
+    pageHeights: {},
+    renderedPages: new Set(),
+    renderedScales: {},
+    textPageCache: {},
+    bgRenderQueue: [],
+    bgRenderRunning: false,
+    zoomRenderTask: null,
+    pageObserver: null,
+    renderPageDebounce: null,
+
+    objectUrls: [],
+    docTextCache: {},
+    docContentCache: {},
+    docDataCache: {},
+    totalCacheSize: 0,
+    MAX_CACHE_SIZE_TOTAL: 500 * 1024 * 1024,
+    MAX_CACHE_COUNT_PER_TYPE: 30,
+
+    totalMatchesFound: 0,
+    totalDocsFound: 0,
+    processed: 0,
+    totalFiles: 0,
+    basePath: '',
+    workerPool: null,
+
+    currentLayout: 'cards',
+    expandedTreeItems: new Set(),
+    smoothScrollEnabled: false,
+    mobileSidebarOpen: false,
+    settingsOpen: false,
+    settingsJustToggled: false,
+    touchStartDist: 0,
+    touchStartScale: 1.0,
+
+    customSearchResults: [],
+    customSearchIndex: 0,
+
+    heatmapContainer: null,
+    _verboseRAF: null,
+};

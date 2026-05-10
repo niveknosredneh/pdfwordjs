@@ -1,18 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mammoth@1.11.0/mammoth.browser.min.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=no">
     <title>PDF Scanner</title>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/favicon.ico">
-    <script src="utils/keywords.js"></script>
-    <script src="utils/worker_pool.js"></script>
-    <script>
+        <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./service_worker.js')
                 .then(reg => console.log('[App] Service Worker registered'))
@@ -109,13 +104,13 @@
 
 <div id="keywordManager">
     <div class="modal">
-        <h3 style="color: #f5f5f5;">Manage Keywords</h3>
+        <h3>Manage Keywords</h3>
         <div class="keyword-list-header">
             <select id="listSelector" onchange="loadListIntoEditor()"></select>
             <button onclick="showNewListDialog()" class="btn-action" style="flex:none; width:80px;">+ New</button>
             <button onclick="deleteCurrentList()" id="deleteListBtn" class="btn-action" style="flex:none; width:80px; background:#c0392b;">Delete</button>
         </div>
-        <p class="list-info" id="listInfo" style="color: #d4d4d4;"></p>
+        <p class="list-info" id="listInfo"></p>
         <textarea id="keywordInput" style="width: 360px; height: 247px;"></textarea>
         <div class="modal-footer">
             <div style="display:flex;gap:8px;">
@@ -141,17 +136,6 @@
     </div>
 </div>
 
-<script src="utils/ui.js"></script>
-    <script src="utils/keyword_regex.js"></script>
-    <script src="utils/file_handler.js"></script>
-    <script src="utils/docx_engine.js"></script>
-    <script src="utils/pdf_search.js"></script>
-    <script src="utils/pdf_renderer.js"></script>
-    <script src="utils/pdf_loader.js"></script>
-    <script src="utils/state_handler.js"></script>
-    <script src="index.js"></script>
-    <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    </script>
+    <script src="bundle.js"></script>
 </body>
 </html>

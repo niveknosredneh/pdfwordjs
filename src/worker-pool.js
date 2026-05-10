@@ -1,7 +1,4 @@
-// worker_pool.js - Manages a pool of web workers for REGEX MATCHING ONLY
-// Text extraction (PDF.js, Mammoth) stays on main thread
-
-window.WorkerPool = class WorkerPool {
+export class WorkerPool {
     constructor(poolSize) {
         this.poolSize = poolSize || Math.min(navigator.hardwareConcurrency || 4, 8);
         this.workers = [];
@@ -77,7 +74,6 @@ window.WorkerPool = class WorkerPool {
         idleWorker.postMessage(taskData);
     }
 
-    // Run regex on already-extracted text (for DOCX or plain text)
     runRegexOnText(text, fileName, keywords, fileType, cacheKey) {
         return new Promise((resolve, reject) => {
             const taskData = {
@@ -85,24 +81,17 @@ window.WorkerPool = class WorkerPool {
                 data: {
                     text: text,
                     fileName: fileName,
-                    keywords: keywords || window.KEYWORDS || [],
+                    keywords: keywords || [],
                     fileType: fileType,
                     cacheKey: cacheKey
                 }
             };
 
-            this.taskQueue.push({
-                taskData,
-                resolve,
-                reject,
-                onProgress: null
-            });
-
+            this.taskQueue.push({ taskData, resolve, reject, onProgress: null });
             this._processQueue();
         });
     }
 
-    // Run regex on PDF cache data (for rescan)
     runRegexOnPDFCache(pages, fileName, keywords, cacheKey) {
         return new Promise((resolve, reject) => {
             const taskData = {
@@ -110,33 +99,24 @@ window.WorkerPool = class WorkerPool {
                 data: {
                     pages: pages,
                     fileName: fileName,
-                    keywords: keywords || window.KEYWORDS || [],
+                    keywords: keywords || [],
                     cacheKey: cacheKey
                 }
             };
 
-            this.taskQueue.push({
-                taskData,
-                resolve,
-                reject,
-                onProgress: null
-            });
-
+            this.taskQueue.push({ taskData, resolve, reject, onProgress: null });
             this._processQueue();
         });
     }
 
-    // Get number of pending + active tasks
     get pendingCount() {
         return this.taskQueue.length + this.activeWorkers.size;
     }
 
-    // Get number of active tasks
     get activeCount() {
         return this.activeWorkers.size;
     }
 
-    // Terminate all workers
     terminate() {
         this.workers.forEach(w => w.terminate());
         this.workers = [];
@@ -145,4 +125,4 @@ window.WorkerPool = class WorkerPool {
         this.taskQueue = [];
         this.initialized = false;
     }
-};
+}

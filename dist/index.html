@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=no">
+    <title>PDF Scanner</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icons/favicon.ico">
+        <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('service_worker.js')
+                .then(reg => console.log('[App] Service Worker registered'))
+                .catch(err => console.error('[App] Service Worker failed:', err));
+        }
+    </script>
+</head>
+<body>
+
+<div id="sidebar" class="sidebar">
+    <div class="header">
+        <div class="header-main-row">
+            <label class="btn-open">
+                <svg class="btn-open-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
+                Open Folder
+                <input type="file" id="folderInput" webkitdirectory directory multiple accept=".pdf,.docx,.doc" style="display:none">
+            </label>
+            <div class="toolbar-section">
+                <button class="btn-icon" id="settingsBtn" onclick="toggleSettings()" title="Settings">&#9881;</button>
+                <button class="btn-icon btn-icon-danger" onclick="clearAllResults()" title="Clear all">&#10005;</button>
+            </div>
+            <button class="mobile-toggle-sidebar" onclick="toggleMobileSidebar()" title="Toggle sidebar" style="display:none;">☰</button>
+        </div>
+        <div class="toolbar-section keyword-row">
+            <button class="btn-icon" onclick="toggleKeywordManager()" title="Manage keyword lists">&#9881;</button>
+            <select class="list-select" id="keywordListSelect" title="Keyword list"></select>
+        </div>
+        <div class="progress-bar-wrap">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="status-bar" id="statusBar"></div>
+    </div>
+
+    
+
+    <div id="results" class="results-area">
+        <h1 class="status-msg">
+        <img src="icons/folder.svg" width="32" height="32" alt="folder">
+        <img src="icons/pdf.svg" width="32" height="32" alt="pdf">
+        <img src="icons/docx.svg" width="32" height="32" alt="docx">
+        <img src="icons/zip.svg" width="32" height="32" alt="zip">
+        </h1>
+        <h2 class="status-msg">Drop here to begin scanning</h2>
+    </div>
+
+
+</div>
+
+<div id="resizer"></div>
+
+<div class="viewer-container">
+    <div class="viewer-toolbar">
+        <div class="toolbar-section toolbar-zoom">
+            <button onclick="zoomOut()" title="Zoom Out (Ctrl+-)">-</button>
+            <span class="zoom-level" id="zoomLevel">100%</span>
+            <button onclick="zoomIn()" title="Zoom In (Ctrl++)">+</button>
+            <button onclick="zoomFit()" title="Fit Width">Fit</button>
+            <button onclick="zoomActual()" title="Actual Size">1:1</button>
+        </div>
+        <div class="toolbar-section toolbar-page">
+            <button onclick="prevPage()" title="Previous page">&#8592;</button>
+            <input type="number" class="page-input small" id="pageInput" min="1" placeholder="0" title="Go to page (G)">
+            <span class="dim">/ <span id="pageTotal">0</span></span>
+            <button onclick="nextPage()" title="Next page">&#8594;</button>
+        </div>
+        <div class="toolbar-section toolbar-keyword" id="navGroup">
+            <span class="separator" id="navSep" style="display:none;">|</span>
+            <button onclick="showSearchOverlay()" class="search-toggle-btn" title="Search (Ctrl+F)">⌕</button>
+            <select class="keyword-select small" id="keywordSelect" title="Keyword"></select>
+            <button onclick="findPrev()" title="Previous match">&#8592;</button>
+            <input type="number" class="match-input small" id="matchInput" min="1" placeholder="0" title="Go to match number">
+            <span class="dim">/ <span id="matchTotal">0</span></span>
+            <button onclick="findNext()" title="Next match">&#8594;</button>
+            <button class="nav-clear" onclick="clearSearch()" title="Clear search">&#10005;</button>
+        </div>
+    </div>
+
+    <div class="viewer-scroll" id="viewerScroll">
+        <div id="viewerDropMsg">
+        <h2>&#10548; Drop a folder to begin scanning</h2>
+        <p></p>
+    </div>
+        <div id="viewerLoader">
+            <div class="spinner"></div>
+            <div class="loader-details">
+                <div class="loader-filename" id="loaderFilename">Loading PDF...</div>
+                <div class="loader-status" id="loaderStatus"></div>
+                <div class="loader-progress-bar"><div class="loader-progress-fill" id="loaderProgressFill"></div></div>
+            </div>
+        </div>
+        <div id="pdfViewer"></div>
+    </div>
+</div>
+
+<div id="keywordManager">
+    <div class="modal">
+        <h3>Manage Keywords</h3>
+        <div class="keyword-list-header">
+            <select id="listSelector" onchange="loadListIntoEditor()"></select>
+            <button onclick="showNewListDialog()" class="btn-action" style="flex:none; width:80px;">+ New</button>
+            <button onclick="deleteCurrentList()" id="deleteListBtn" class="btn-action" style="flex:none; width:80px; background:#c0392b;">Delete</button>
+        </div>
+        <p class="list-info" id="listInfo"></p>
+        <textarea id="keywordInput" style="width: 360px; height: 247px;"></textarea>
+        <div class="modal-footer">
+            <div style="display:flex;gap:8px;">
+                <button onclick="exportKeywords()" class="btn-action" style="flex:none; width:80px;">Export</button>
+                <button onclick="importKeywords()" class="btn-action" style="flex:none; width:80px;">Import</button>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button onclick="toggleKeywordManager()" class="btn-action" style="flex:none; width:80px;">Cancel</button>
+                <button onclick="saveCurrentList()" class="btn-action" style="flex:none; width:100px; background:var(--green); color:white; border:none;">Save & Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="newListDialog">
+    <div class="modal">
+        <h3>New Keyword List</h3>
+        <input type="text" id="newListName" placeholder="List name" onkeydown="if(event.key==='Enter')createNewList()">
+        <div class="modal-footer">
+            <button onclick="hideNewListDialog()" class="btn-action" style="flex:none; width:100px;">Cancel</button>
+            <button onclick="createNewList()" class="btn-action" style="flex:none; width:80px; background:var(--green); color:white; border:none;">Create</button>
+        </div>
+    </div>
+</div>
+
+    <script src="bundle.js"></script>
+</body>
+</html>

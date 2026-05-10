@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.join(__dirname, 'dist');
 
+fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
 
 await esbuild.build({
@@ -17,14 +18,17 @@ await esbuild.build({
     define: { 'process.env.NODE_ENV': '"production"' },
 });
 
-fs.cpSync(path.join(__dirname, 'public'), dist, { recursive: true });
+function copy(src, dest) { fs.cpSync(path.join(__dirname, src), path.join(dist, dest), { recursive: true }); }
 
-let html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
-html = html.replaceAll('../dist/', './');
+const assets = ['style.css', 'manifest.json', 'keywords.json', 'icons'];
+assets.forEach(a => copy('src/' + a, a));
+
+let html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+html = html.replaceAll('dist/', '');
 fs.writeFileSync(path.join(dist, 'index.html'), html);
 
-fs.cpSync(path.join(__dirname, 'node_modules/pdfjs-dist/build/pdf.worker.min.js'), path.join(dist, 'pdf.worker.min.js'));
-fs.mkdirSync(path.join(dist, 'utils'), { recursive: true });
-fs.cpSync(path.join(__dirname, 'src/doc_processor_worker.js'), path.join(dist, 'utils/doc_processor_worker.js'));
+copy('service_worker.js', 'service_worker.js');
+copy('node_modules/pdfjs-dist/build/pdf.worker.min.js', 'pdf.worker.min.js');
+copy('src/doc_processor_worker.js', 'utils/doc_processor_worker.js');
 
 console.log('Build complete: dist/bundle.js + dist/pdf.worker.min.js');

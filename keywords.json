@@ -253,15 +253,6 @@
       "agru america",
       "Huesker"
     ],
-    "Western Supply-Only": [],
-    "Eastern Supply-Only": [],
-    "SWM - Stormwater": [
-      "stormwater system",
-      "storm water system",
-      "Stormwater Storage",
-      "StormTank",
-      "soil cell"
-    ],
     "Construction - Geomembrane": [
       "geotextile",
       "Geotextile",
@@ -373,47 +364,6 @@
       "multi flow",
       "heat bonded",
       "mobilization"
-    ],
-    "MSE - Walls": [
-      "vegetated wall",
-      "veggie wall",
-      "reinforced wall",
-      "MSE Wall",
-      "stabilized earth",
-      "reinforced soil",
-      "Retaining Wall",
-      "gabions",
-      "geogrid",
-      "geo grid",
-      "geo-grid",
-      "Earth Grid",
-      "gladiator grid",
-      "uniaxial",
-      "uni-axial",
-      "bi axial",
-      "bi-axial",
-      "biaxial",
-
-      "Mesa Wall",
-      "ARES Wall",
-      "Reinforced Earth",
-      "T-WALL"
-    ],
-    "CPL - Concrete Protection": [
-      "concrete protective liner",
-      "Studliner",
-      "Sure-Grip",
-      "Sure Grip",
-      "concrete liner",
-      "CONCRETE LINING SYSTEM",
-      "Liner sheet",
-      "ultra grip",
-      "HDPE pipe liner",
-      "agru",
-      "solmax"
-    ],
-    "Business Development": [
-      "nilex"
     ]
   }
 }

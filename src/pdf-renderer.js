@@ -5,11 +5,11 @@ import { fn } from './cross.js';
 state.pageHeights = {};
 state.renderedPages = new Set();
 state.renderedScales = {};
-state.bgRenderQueue = [];
-state.bgRenderRunning = false;
 state.zoomRenderTask = null;
 state.pageObserver = null;
-state.renderPageDebounce = null;
+state.renderQueue = [];
+state.renderQueueBusy = false;
+state.renderTasks = new Set();
 
 export async function setupVirtualPages() {
     dom.viewer.innerHTML = '';
@@ -51,65 +51,94 @@ function setupPageObserver() {
     if (state.pageObserver) state.pageObserver.disconnect();
 
     state.pageObserver = new IntersectionObserver((entries) => {
-        if (state.renderPageDebounce) return;
-
-        const pagesToRender = [];
+        let added = false;
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 const pageNum = parseInt(entry.target.dataset.pageNum);
-                if (pageNum && !isPageRendered(pageNum)) pagesToRender.push(pageNum);
+                if (pageNum && !isPageRendered(pageNum) && !state.renderQueue.includes(pageNum)) {
+                    state.renderQueue.push(pageNum);
+                    added = true;
+                }
             }
         });
-
-        if (pagesToRender.length === 0) return;
-
-        state.renderPageDebounce = setTimeout(() => {
-            state.renderPageDebounce = null;
-            if (pagesToRender.length <= 3) {
-                pagesToRender.forEach(p => renderPageNow(p));
-            } else {
-                const mid = Math.floor(pagesToRender.length / 2);
-                pagesToRender.slice(0, mid).forEach(p => renderPageNow(p));
-                setTimeout(() => pagesToRender.slice(mid).forEach(p => renderPageNow(p)), 50);
-            }
-        }, 20);
+        if (added) processRenderQueue();
     }, { root: dom.viewerScroll, rootMargin: '500px' });
 
     document.querySelectorAll('[id^="page-"]').forEach(el => state.pageObserver.observe(el));
 }
 
+const RENDER_CONCURRENCY = 2;
+const YIELD_INTERVAL = 4;
+
+async function processRenderQueue() {
+    if (state.renderQueueBusy) return;
+    state.renderQueueBusy = true;
+    let renderCount = 0;
+    try {
+        while (state.renderQueue.length > 0) {
+            const batch = [];
+            while (batch.length < RENDER_CONCURRENCY && state.renderQueue.length > 0) {
+                const pn = state.renderQueue.shift();
+                if (!isPageRendered(pn)) batch.push(pn);
+            }
+            if (batch.length === 0) continue;
+            await Promise.all(batch.map(pn => renderPageNow(pn)));
+            renderCount += batch.length;
+            if (renderCount % YIELD_INTERVAL === 0) {
+                await new Promise(r => setTimeout(r, 0));
+            }
+        }
+    } finally {
+        state.renderQueueBusy = false;
+        if (state.renderQueue.length > 0) processRenderQueue();
+    }
+}
+
 export function startBgRender() {
     if (!state.pdfDoc) return;
     cancelBgRender();
-    state.bgRenderRunning = true;
 
-    state.bgRenderQueue = [];
     for (let i = 1; i <= state.totalPages; i++) {
-        if (!isPageRendered(i)) state.bgRenderQueue.push(i);
+        if (!isPageRendered(i) && !state.renderQueue.includes(i)) {
+            state.renderQueue.push(i);
+        }
     }
 
-    if (!isPageRendered(1)) renderPageNow(1);
-    renderNextBg();
-}
-
-async function renderNextBg() {
-    if (!state.bgRenderQueue.length) {
-        state.bgRenderRunning = false;
-        return;
-    }
-
-    const pageNum = state.bgRenderQueue.shift();
-    if (!isPageRendered(pageNum)) await renderPageNow(pageNum);
-    requestAnimationFrame(renderNextBg);
+    processRenderQueue();
 }
 
 export function cancelBgRender() {
-    state.bgRenderQueue = [];
-    state.bgRenderRunning = false;
+    state.renderQueue = [];
 }
 
 export function isPageRendered(pageNum) {
     return state.renderedPages.has(pageNum);
+}
+
+function buildTextLayer(el, pageNum, renderScale, displayHeight) {
+    if (!el.isConnected) return;
+    const existing = el.querySelector('.textLayer');
+    if (existing) existing.remove();
+
+    const textContent = state.textPageCache[pageNum];
+    if (!textContent || !textContent.items) return;
+
+    const textLayer = document.createElement('div');
+    textLayer.className = 'textLayer';
+
+    for (const item of textContent.items) {
+        const span = document.createElement('span');
+        span.textContent = item.text;
+        const t = item.transform;
+        const x = t[4] * renderScale;
+        const y = t[5] * renderScale;
+        const fontSize = Math.sqrt(t[0] * t[0] + t[1] * t[1]) * renderScale;
+
+        span.style.cssText = 'position:absolute;left:' + x + 'px;top:' + (displayHeight - y - fontSize) + 'px;font-size:' + fontSize + 'px;font-family:sans-serif;white-space:pre;color:transparent';
+        textLayer.appendChild(span);
+    }
+
+    el.appendChild(textLayer);
 }
 
 export async function renderPageNow(pageNum, forceScale = null) {
@@ -131,7 +160,10 @@ export async function renderPageNow(pageNum, forceScale = null) {
         const displayHeight = viewport.height / dpr;
 
         el.className = 'pdf-page';
-        el.innerHTML = '<div class="page-loading"><div class="spinner"></div>Loading...</div>';
+        const hasCanvas = !!el.querySelector('canvas');
+        if (!hasCanvas) {
+            el.innerHTML = '<div class="page-loading"><div class="spinner"></div>Loading...</div>';
+        }
         const vp1 = page.getViewport({ scale: 1.0 });
         el.style.setProperty('--base-w', vp1.width);
         el.style.setProperty('--base-h', vp1.height);
@@ -144,52 +176,41 @@ export async function renderPageNow(pageNum, forceScale = null) {
         canvas.style.height = displayHeight + 'px';
         canvas.dataset.scale = renderScale;
 
-        if (!state.textPageCache[pageNum]) {
-            const textContent = await page.getTextContent();
-            let pageText = '';
-            const textItems = [];
-            for (const item of textContent.items) {
-                pageText += item.str;
-                textItems.push({ text: item.str, transform: item.transform, width: item.width, height: item.height });
-            }
-            state.textPageCache[pageNum] = { text: pageText, viewport: vp1, items: textItems };
-            state.pageHeights[pageNum] = vp1.height;
-        }
+        const textPromise = state.textPageCache[pageNum]
+            ? null
+            : page.getTextContent().then(textContent => {
+                let pageText = '';
+                const textItems = [];
+                for (const item of textContent.items) {
+                    pageText += item.str;
+                    textItems.push({ text: item.str, transform: item.transform, width: item.width, height: item.height });
+                }
+                state.textPageCache[pageNum] = { text: pageText, viewport: vp1, items: textItems };
+                state.pageHeights[pageNum] = vp1.height;
+            });
 
-        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+        const renderTask = page.render({ canvasContext: ctx, viewport: viewport });
+        state.renderTasks.add(renderTask);
+
+        if (textPromise) await textPromise;
+        await renderTask.promise;
+        state.renderTasks.delete(renderTask);
 
         state.renderedPages.add(pageNum);
         state.renderedScales[pageNum] = Math.max(state.renderedScales[pageNum] || 0, renderScale);
 
         const existingCanvas = el.querySelector('canvas');
-        if (existingCanvas) existingCanvas.remove();
-        el.innerHTML = '';
-        el.appendChild(canvas);
-
-        const existingTextLayer = el.querySelector('.textLayer');
-        if (existingTextLayer) existingTextLayer.remove();
-
-        const textLayer = document.createElement('div');
-        textLayer.className = 'textLayer';
-
-        const textContent = state.textPageCache[pageNum];
-        if (textContent && textContent.items) {
-            for (const item of textContent.items) {
-                const span = document.createElement('span');
-                span.textContent = item.text;
-                const transform = item.transform;
-                const scale = renderScale;
-                const x = transform[4] * scale;
-                const y = transform[5] * scale;
-                const fontSize = Math.sqrt(transform[0] * transform[0] + transform[1] * transform[1]) * scale;
-
-                span.style.cssText = 'position:absolute;left:' + x + 'px;top:' + (displayHeight - y - fontSize) + 'px;font-size:' + fontSize + 'px;font-family:sans-serif;white-space:pre;color:transparent';
-                textLayer.appendChild(span);
-            }
+        if (existingCanvas && existingCanvas !== canvas) existingCanvas.remove();
+        if (hasCanvas) {
+            el.appendChild(canvas);
+        } else {
+            el.innerHTML = '';
+            el.appendChild(canvas);
         }
 
         el.style.position = 'relative';
-        el.appendChild(textLayer);
+
+        requestAnimationFrame(() => buildTextLayer(el, pageNum, renderScale, displayHeight));
 
         if (state.searchResults.length > 0) fn.renderHighlightsForPage(pageNum);
     } catch (err) {
@@ -222,8 +243,14 @@ export function setZoom(newScale, force = false) {
         canvas.style.height = (baseH * clampedScale) + 'px';
     }
 
+    for (const t of state.renderTasks) {
+        try { t.cancel(); } catch (e) {}
+    }
+    state.renderTasks.clear();
+
     state.renderedPages.clear();
     state.renderedScales = {};
+    state.renderQueue = [];
 
     requestAnimationFrame(() => {
         const newScrollHeight = dom.viewerScroll.scrollHeight;
@@ -237,15 +264,19 @@ export function setZoom(newScale, force = false) {
         }
         if (state.searchResults.length > 0) fn.renderAllHighlights();
         fn.renderPageHeatmaps();
+        startBgRender();
     });
 }
 
-export async function startPrerender() {
+export function startPrerender() {
     if (state.searchResults.length === 0) return;
 
     const pagesWithMatches = [...new Set(state.searchResults.map(r => r.page))];
 
     for (const pageNum of pagesWithMatches) {
-        if (!isPageRendered(pageNum)) await renderPageNow(pageNum);
+        if (!isPageRendered(pageNum) && !state.renderQueue.includes(pageNum)) {
+            state.renderQueue.push(pageNum);
+        }
     }
+    processRenderQueue();
 }

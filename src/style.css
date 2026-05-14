@@ -257,8 +257,8 @@ body {
     font-size: 0.75rem; display: flex; justify-content: space-between; color: var(--grey-400);
 }
 
-.progress-bar-wrap { height: 4px; background: var(--grey-700); margin-top: 2px; border-radius: 1px; overflow: hidden; }
-.progress-bar { height: 100%; background: var(--green); width: 0%; transition: width 0.3s; }
+.progress-svg-wrap { display: inline-flex; align-items: center; width: 21px; height: 21px; pointer-events: none; flex-shrink: 0; }
+.progress-svg-wrap svg { width: 100%; height: 100%; display: block; }
 .status-bar { font-size: 0.65rem; color: var(--grey-400); margin-top: 1px; padding: 0 1px; min-height: 18px; font-family: 'Courier New', monospace; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #viewerDropMsg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--grey-500); font-size: 1.1rem; text-align: center; pointer-events: none; opacity: 0.5; }
 
@@ -732,7 +732,7 @@ body {
 .loader-details { text-align: center; }
 .loader-filename { font-size: 0.85rem; color: var(--grey-300); margin-bottom: 4px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .loader-status { font-size: 0.75rem; color: var(--grey-500); }
-.loader-progress-bar { width: 200px; height: 4px; background: var(--grey-700); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+.loader-progress-bar { width: 200px; height: 2px; background: var(--grey-700); border-radius: 2px; overflow: hidden; margin-top: 8px; }
 .loader-progress-fill { height: 100%; background: var(--green); width: 0%; transition: width 0.15s; }
 
 #keywordManager {

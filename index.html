@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="dist/style.css">
     <link rel="manifest" href="dist/manifest.json">
     <link rel="icon" href="dist/icons/favicon.ico">
-        <script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/progressbar.js/1.1.0/progressbar.min.js"></script>
+    <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('service_worker.js')
                 .then(reg => console.log('[App] Service Worker registered'))
@@ -32,11 +33,9 @@
             <button class="mobile-toggle-sidebar" onclick="toggleMobileSidebar()" title="Toggle sidebar" style="display:none;">☰</button>
         </div>
         <div class="toolbar-section keyword-row">
+            <span class="progress-svg-wrap"></span>
             <button class="btn-icon" onclick="toggleKeywordManager()" title="Manage keyword lists">&#9881;</button>
             <select class="list-select" id="keywordListSelect" title="Keyword list"></select>
-        </div>
-        <div class="progress-bar-wrap">
-            <div class="progress-bar" id="progressBar"></div>
         </div>
         <div class="status-bar" id="statusBar"></div>
     </div>

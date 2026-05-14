@@ -51,6 +51,7 @@ function loadPDF(fileUrl, keyword = '') {
     state.searchCache = {};
     fn.clearSearch();
     state.currentScale = 1.0;
+    document.documentElement.style.setProperty('--pdf-scale', '1');
     state.currentPage = 1;
     state.textPageCache = {};
 
@@ -71,15 +72,31 @@ function loadPDF(fileUrl, keyword = '') {
 
             let cached = state.docTextCache[fileUrl];
             if (!cached) {
-                dom.loaderFilename.textContent = 'Re-scanning PDF...';
-                const blobUrl = state.objectUrls.find(url => url === fileUrl);
-                if (blobUrl) {
-                    const response = await fetch(blobUrl);
-                    const arrayBuffer = await response.arrayBuffer();
-                    const fileName = state.docDataCache[fileUrl]?.name || 'Document';
-                    await fn.extractPdfText(arrayBuffer, fileName, fileUrl, null);
-                    cached = state.docTextCache[fileUrl];
+                dom.loaderFilename.textContent = 'Extracting text from loaded PDF...';
+                const pageTextData = [];
+                for (let p = 1; p <= state.totalPages; p++) {
+                    const page = await state.pdfDoc.getPage(p);
+                    const content = await page.getTextContent();
+                    const vp = page.getViewport({ scale: 1.0 });
+                    let pageText = '';
+                    const textItems = [];
+                    for (const item of content.items) {
+                        pageText += item.str;
+                        textItems.push({ text: item.str, transform: item.transform, width: item.width, height: item.height });
+                    }
+                    pageTextData.push({ text: pageText, viewport: { width: vp.width, height: vp.height }, items: textItems });
+                    dom.loaderProgressFill.style.width = Math.round(60 + (p / state.totalPages) * 20) + '%';
                 }
+                const fileName = state.docDataCache[fileUrl]?.name || 'Document';
+                cached = {
+                    totalPages: state.totalPages,
+                    pages: pageTextData,
+                    fileName,
+                    _lastAccess: Date.now(),
+                    _size: JSON.stringify(pageTextData).length + fileName.length
+                };
+                state.docTextCache[fileUrl] = cached;
+                state.totalCacheSize += cached._size;
             }
             if (cached) {
                 cached._lastAccess = Date.now();

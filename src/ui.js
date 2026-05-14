@@ -63,6 +63,7 @@ export function clearAllResults() {
     state.currentDocUrl = '';
     state.currentDocType = 'pdf';
     state.currentScale = 1.0;
+    document.documentElement.style.setProperty('--pdf-scale', '1');
     state.currentPage = 1;
     state.totalPages = 0;
     dom.viewer.innerHTML = '';
@@ -72,6 +73,7 @@ export function clearAllResults() {
     state.searchCache = {};
     clearSearch();
     state.currentScale = 1.0;
+    document.documentElement.style.setProperty('--pdf-scale', '1');
     state.currentPage = 1;
     state.textPageCache = {};
     state.docSearchResults = [];
@@ -755,7 +757,5 @@ dom.statusBar.textContent = 'Ready';
 state.touchStartDist = 0;
 state.touchStartScale = 1.0;
 state.pageObserver = null;
-state.renderPageDebounce = null;
-state.bgRenderRunning = false;
-state.bgRenderQueue = [];
-state.zoomRenderTask = null;
+state.renderQueue = [];
+state.renderQueueBusy = false;

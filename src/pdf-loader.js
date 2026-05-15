@@ -47,6 +47,7 @@ function loadPDF(fileUrl, keyword = '') {
     dom.viewer.innerHTML = '';
     state.renderedPages.clear();
     state.renderedScales = {};
+    state.pendingRenders.clear();
     state.pageHeights = {};
     state.searchCache = {};
     fn.clearSearch();

@@ -761,5 +761,3 @@ dom.statusBar.innerHTML = '<span>Ready</span><span>#__BUNDLE_HASH__ __COMMIT_DAT
 state.touchStartDist = 0;
 state.touchStartScale = 1.0;
 state.pageObserver = null;
-state.renderQueue = [];
-state.renderQueueBusy = false;

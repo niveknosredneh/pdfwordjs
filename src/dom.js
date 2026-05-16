@@ -47,7 +47,7 @@ Object.defineProperty(_proxyStyle, 'width', {
         const pct = parseInt(v) / 100;
         if (!isNaN(pct) && _progressPb) {
             if (pct <= 0) _progressPb.set(0);
-            else _progressPb.animate(pct);
+            else { const a = _progressPb.animate(pct); if (a && a.catch) a.catch(() => {}); }
         }
     }
 });

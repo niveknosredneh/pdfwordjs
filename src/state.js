@@ -20,10 +20,7 @@ export const state = {
     renderedPages: new Set(),
     renderedScales: {},
     textPageCache: {},
-    renderQueue: [],
-    renderQueueBusy: false,
-    zoomRenderTask: null,
-    renderTasks: new Set(),
+    renderTasks: new Map(),
     pageObserver: null,
 
     objectUrls: [],

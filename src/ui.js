@@ -72,9 +72,6 @@ export function clearAllResults() {
     state.pageHeights = {};
     state.searchCache = {};
     clearSearch();
-    state.currentScale = 1.0;
-    document.documentElement.style.setProperty('--pdf-scale', '1');
-    state.currentPage = 1;
     state.textPageCache = {};
     state.docSearchResults = [];
     state.docCurrentMatchIndex = -1;
@@ -746,6 +743,13 @@ export function setupEventListeners() {
         }, false);
     });
 }
+
+window.addEventListener('beforeunload', () => {
+    if (state.objectUrls) {
+        state.objectUrls.forEach(url => URL.revokeObjectURL(url));
+        state.objectUrls = [];
+    }
+});
 
 dom.statusBar.textContent = 'Ready';
 

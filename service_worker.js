@@ -1,4 +1,5 @@
-const CACHE_NAME = 'kwpdf-v0.958';
+const CACHE_NAME = 'kwpdf-__CACHE_VERSION__';
+const NETWORK_FIRST = ['./bundle.js'];
 const LOCAL_ASSETS = [
     './index.html',
     './bundle.js',
@@ -44,19 +45,33 @@ self.addEventListener('activate', event => {
     );
 });
 
+function isNetworkFirst(url) {
+    return NETWORK_FIRST.some(asset => url.includes(asset));
+}
+
 self.addEventListener('fetch', event => {
     if (event.request.method !== 'GET') return;
+
+    if (isNetworkFirst(event.request.url)) {
+        event.respondWith(
+            fetch(event.request).then(response => {
+                if (response.ok) {
+                    const copy = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+                }
+                return response;
+            }).catch(() => caches.match(event.request))
+        );
+        return;
+    }
 
     event.respondWith(
         caches.match(event.request).then(cached => {
             if (cached) {
-                // Serve from cache, update in background
                 fetch(event.request).then(response => {
                     if (response.ok) {
                         const copy = response.clone();
-                        caches.open(CACHE_NAME).then(cache => {
-                            cache.put(event.request, copy);
-                        });
+                        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
                     }
                 }).catch(() => {});
                 return cached;
@@ -65,9 +80,7 @@ self.addEventListener('fetch', event => {
             return fetch(event.request).then(response => {
                 if (response.ok) {
                     const copy = response.clone();
-                    caches.open(CACHE_NAME).then(cache => {
-                        cache.put(event.request, copy);
-                    });
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
                 }
                 return response;
             }).catch(() => {

@@ -129,7 +129,7 @@ window.loadListIntoEditor = function() {
     const keywordLists = keywords.getKeywordLists();
     const words = keywordLists[finalName] || [];
     dom.keywordInput.value = words.join('\n');
-    dom.deleteListBtn.style.display = ['Central Supply-Only', 'Liners', 'Companies'].includes(finalName) ? 'none' : '';
+    dom.deleteListBtn.style.display = keywords.isCustomList(finalName) ? '' : 'none';
     dom.listInfo.textContent = words.length + ' keywords';
     if (dom.listSelector && finalName) dom.listSelector.value = finalName;
 };
@@ -153,7 +153,7 @@ window.createNewList = function() {
 };
 window.deleteCurrentList = function() {
     const listName = dom.listSelector ? dom.listSelector.value : '';
-    if (!listName || ['Central Supply-Only', 'Liners', 'Companies'].includes(listName)) return;
+    if (!listName || !keywords.isCustomList(listName)) return;
     if (!confirm('Delete list "' + listName + '"?')) return;
     const lists = keywords.getKeywordLists();
     const updated = {};
@@ -184,13 +184,36 @@ window.importKeywords = function() {
     input.onchange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
+        if (file.size > 1024 * 1024) {
+            alert('File too large. Maximum import size is 1 MB.');
+            return;
+        }
         const reader = new FileReader();
         reader.onload = (event) => {
             try {
-                const data = JSON.parse(event.target.result);
-                if (!data.keywords || !Array.isArray(data.keywords)) { alert('Invalid file format.'); return; }
-                const listName = data.name || 'Imported List';
-                const words = data.keywords.filter(k => typeof k === 'string' && k.trim());
+                const text = event.target.result;
+                if (text.length > 1024 * 1024) {
+                    alert('File content too large.');
+                    return;
+                }
+                const data = JSON.parse(text);
+                if (!data || typeof data !== 'object' || Array.isArray(data)) {
+                    alert('Invalid file format: expected a JSON object.');
+                    return;
+                }
+                if (!Array.isArray(data.keywords)) {
+                    alert('Invalid file format: "keywords" must be an array.');
+                    return;
+                }
+                if (data.name && typeof data.name !== 'string') {
+                    alert('Invalid file format: "name" must be a string.');
+                    return;
+                }
+                const listName = (data.name || 'Imported List').slice(0, 100);
+                const words = data.keywords
+                    .filter(k => typeof k === 'string' && k.trim())
+                    .map(k => k.trim().slice(0, state.MAX_KEYWORD_LENGTH))
+                    .slice(0, state.MAX_KEYWORDS_PER_LIST);
                 keywords.switchKeywordList(listName);
                 keywords.populateListSelector();
                 alert('Imported "' + listName + '" with ' + words.length + ' keywords.');
@@ -202,7 +225,7 @@ window.importKeywords = function() {
 };
 window.saveCurrentList = function() {
     const listName = dom.listSelector ? dom.listSelector.value : keywords.getCurrentListName();
-    const lines = dom.keywordInput.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const lines = dom.keywordInput.value.split('\n').map(l => l.trim()).filter(l => l.length > 0).slice(0, state.MAX_KEYWORDS_PER_LIST).map(k => k.slice(0, state.MAX_KEYWORD_LENGTH));
     keywords.switchKeywordList(listName);
     keywords.toggleKeywordManager();
 };

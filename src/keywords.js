@@ -6,6 +6,7 @@ let DEFAULT_LIST_NAME = 'Central Supply-Only';
 let KEYWORD_LISTS = {};
 let currentListName = DEFAULT_LIST_NAME;
 let KEYWORDS = [];
+const DEFAULT_LISTS = ['Central Supply-Only', 'Liners', 'Companies'];
 
 export function getKeywords() {
     return KEYWORDS;
@@ -56,19 +57,17 @@ function loadCustomLists() {
 
 function saveCustomLists() {
     const custom = {};
-    const defaultLists = ['Central Supply-Only', 'Liners', 'Companies'];
 
     for (const name of Object.keys(KEYWORD_LISTS)) {
-        if (!defaultLists.includes(name)) {
+        if (!DEFAULT_LISTS.includes(name)) {
             custom[name] = KEYWORD_LISTS[name];
         }
     }
     localStorage.setItem('tender_custom_lists', JSON.stringify(custom));
 }
 
-function isCustomList(name) {
-    const defaultLists = ['Central Supply-Only', 'Liners', 'Companies'];
-    return !defaultLists.includes(name);
+export function isCustomList(name) {
+    return !DEFAULT_LISTS.includes(name);
 }
 
 function createList(name, words) {
@@ -229,7 +228,9 @@ function saveCurrentList() {
 
     const lines = dom.keywordInput.value.split('\n')
         .map(line => line.trim())
-        .filter(line => line.length > 0);
+        .filter(line => line.length > 0)
+        .slice(0, state.MAX_KEYWORDS_PER_LIST)
+        .map(k => k.slice(0, state.MAX_KEYWORD_LENGTH));
 
     updateList(listName, lines);
     switchKeywordList(listName);

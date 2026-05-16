@@ -178,7 +178,7 @@ export function cycleDocSearch(query) {
 
     const wasSameQuery = state.docSearchResults.length > 0 && state.docContentCache[state.currentDocUrl]?.lastQuery === query;
     state.docCurrentMatchIndex = (!wasSameQuery) ? 0 : (state.docCurrentMatchIndex + 1) % results.length;
-    state.docContentCache[state.currentDocUrl].lastQuery = query;
+    if (state.docContentCache[state.currentDocUrl]) state.docContentCache[state.currentDocUrl].lastQuery = query;
 
     state.docSearchResults = results;
 

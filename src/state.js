@@ -54,4 +54,11 @@ export const state = {
     customSearchIndex: 0,
 
     _verboseRAF: null,
+
+    MAX_FILE_SIZE: 500 * 1024 * 1024,
+    MAX_DOC_FILE_SIZE: 100 * 1024 * 1024,
+    MAX_ZIP_FILE_SIZE: 500 * 1024 * 1024,
+    MAX_KEYWORDS_PER_LIST: 500,
+    MAX_KEYWORD_LENGTH: 200,
+    MAX_TOTAL_FILES: 1000,
 };

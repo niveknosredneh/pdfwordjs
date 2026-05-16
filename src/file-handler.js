@@ -66,6 +66,11 @@ function updateProgressMainThread() {
     dom.progressBar.style.width = pct + '%';
 }
 
+function showFileError(fileName, message) {
+    dom.statusBar.textContent = 'Error: ' + message;
+    console.warn('[File]', fileName, '-', message);
+}
+
 function evictCaches() {
     const allEntries = [];
 
@@ -155,7 +160,7 @@ export async function extractPdfText(arrayBuffer, fileName, id, file) {
 
         return pdfCacheEntry;
     } catch (err) {
-        console.error('[PDF] Error processing PDF:', err);
+        showFileError(fileName, 'Failed to extract PDF text: ' + (err.message || err));
     }
 }
 
@@ -173,7 +178,7 @@ export async function extractDocText(arrayBuffer, fileName, id, file) {
         }
 
         if (!plainText && !htmlContent) {
-            console.warn('[DOC] No text extracted from:', fileName);
+            showFileError(fileName, 'No extractable text found');
             updateProgressMainThread();
             return;
         }
@@ -215,7 +220,7 @@ export async function extractDocText(arrayBuffer, fileName, id, file) {
 
         return docxCacheEntry;
     } catch (err) {
-        console.error('[DOC] Error processing document:', err);
+        showFileError(fileName, 'Failed to extract document text: ' + (err.message || err));
     }
 }
 
@@ -231,10 +236,19 @@ async function processFiles(files) {
     dom.progressBar.style.width = '0%';
 
     state.processed = 0;
-    state.totalFiles = files.length;
+    state.totalFiles = Math.min(files.length, state.MAX_TOTAL_FILES);
+    let failedCount = 0;
 
-    for (let i = 0; i < files.length; i++) {
+    for (let i = 0; i < state.totalFiles; i++) {
         const file = files[i];
+        const sizeLimit = getFileType(file.name) === 'pdf' ? state.MAX_FILE_SIZE : state.MAX_DOC_FILE_SIZE;
+        if (file.size > sizeLimit) {
+            showFileError(file.name, 'Skipped (' + (file.size / 1024 / 1024).toFixed(1) + ' MB exceeds limit)');
+            updateProgressMainThread();
+            fn.updateStats();
+            continue;
+        }
+
         const url = URL.createObjectURL(file);
         state.objectUrls.push(url);
 
@@ -242,59 +256,88 @@ async function processFiles(files) {
 
         fn.renderPlaceholderCard(file.name, url, file);
 
+        let success = false;
         try {
             const arrayBuffer = file._cachedBuffer || await file.arrayBuffer();
             const type = getFileType(file.name);
 
             if (type === 'pdf') {
                 await extractPdfText(arrayBuffer, file.name, url, file);
+                success = !!state.docTextCache[url];
             } else if (type === 'docx' || type === 'doc') {
                 await extractDocText(arrayBuffer, file.name, url, file);
+                success = !!state.docContentCache[url];
             }
+        } catch (err) {
+            showFileError(file.name, err.message || err);
         } finally {
+            if (!success) {
+                const idx = state.objectUrls.indexOf(url);
+                if (idx !== -1) state.objectUrls.splice(idx, 1);
+                URL.revokeObjectURL(url);
+                failedCount++;
+            }
             stopVerboseStatus();
             updateProgressMainThread();
             fn.updateStats();
         }
     }
+
+    if (failedCount > 0) {
+        dom.statusBar.textContent = failedCount + ' file(s) failed to process';
+    }
 }
 
 export async function handleDrop(e) {
-    const entries = [];
-    if (e.dataTransfer.items) {
-        for (let i = 0; i < e.dataTransfer.items.length; i++) {
-            const entry = e.dataTransfer.items[i].webkitGetAsEntry();
-            if (entry) entries.push(entry);
+    try {
+        const entries = [];
+        if (e.dataTransfer.items) {
+            for (let i = 0; i < e.dataTransfer.items.length; i++) {
+                const entry = e.dataTransfer.items[i].webkitGetAsEntry();
+                if (entry) entries.push(entry);
+            }
         }
-    }
-    state.basePath = '';
-    let filesToProcess = [];
+        state.basePath = '';
+        let filesToProcess = [];
 
-    const viewerMsg = document.getElementById('viewerDropMsg');
-    if (viewerMsg) viewerMsg.style.display = 'none';
-    const statusMsgs = dom.resultsArea.querySelectorAll('.status-msg');
-    statusMsgs.forEach(el => el.remove());
+        const viewerMsg = document.getElementById('viewerDropMsg');
+        if (viewerMsg) viewerMsg.style.display = 'none';
+        const statusMsgs = dom.resultsArea.querySelectorAll('.status-msg');
+        statusMsgs.forEach(el => el.remove());
 
-    for (const entry of entries) {
-        if (entry.isFile && entry.name.toLowerCase().endsWith('.zip')) {
-            dom.statusBar.textContent = 'Unzipping ' + entry.name + '...';
+        for (const entry of entries) {
+            if (entry.isFile && entry.name.toLowerCase().endsWith('.zip')) {
+                dom.statusBar.textContent = 'Unzipping ' + entry.name + '...';
+                dom.progressBar.style.width = '0%';
+                try {
+                    const zipFile = await new Promise((resolve, reject) => {
+                        entry.file(resolve, reject);
+                    });
+                    state.basePath = zipFile.name.replace(/\.zip$/i, '');
+                    filesToProcess = filesToProcess.concat(await extractAllFromZip(zipFile));
+                } catch (err) {
+                    showFileError(entry.name, 'Failed to read zip file: ' + (err.message || err));
+                }
+            } else {
+                dom.statusBar.textContent = 'Reading folder "' + entry.name + '"...';
+                dom.progressBar.style.width = '0%';
+                try {
+                    await traverseFileTree(entry, filesToProcess, '');
+                    state.basePath = entry.name;
+                } catch (err) {
+                    showFileError(entry.name, 'Failed to read folder: ' + (err.message || err));
+                }
+            }
+        }
+
+        if (filesToProcess.length === 0) {
+            dom.statusBar.textContent = 'No supported files found';
             dom.progressBar.style.width = '0%';
-            const zipFile = await new Promise((resolve) => entry.file(resolve));
-            state.basePath = zipFile.name.replace(/\.zip$/i, '');
-            filesToProcess = filesToProcess.concat(await extractAllFromZip(zipFile));
         } else {
-            dom.statusBar.textContent = 'Reading folder "' + entry.name + '"...';
-            dom.progressBar.style.width = '0%';
-            await traverseFileTree(entry, filesToProcess, '');
-            state.basePath = entry.name;
+            processFiles(filesToProcess);
         }
-    }
-
-    if (filesToProcess.length === 0) {
-        dom.statusBar.textContent = 'No supported files found';
-        dom.progressBar.style.width = '0%';
-    } else {
-        processFiles(filesToProcess);
+    } catch (err) {
+        showFileError('(drop)', 'Failed to process dropped files: ' + (err.message || err));
     }
 }
 
@@ -302,38 +345,65 @@ async function traverseFileTree(item, fileList, baseDir = '') {
     const currentPath = baseDir ? baseDir + '/' + item.name : item.name;
     const type = getFileType(item.name);
     if (item.isFile && type) {
-        const file = await new Promise((resolve) => item.file(resolve));
-        file.relativePath = currentPath;
-        fileList.push(file);
+        try {
+            const file = await new Promise((resolve, reject) => {
+                item.file(resolve, reject);
+            });
+            file.relativePath = currentPath;
+            fileList.push(file);
+        } catch (err) {
+            showFileError(currentPath, 'Failed to read file: ' + (err.message || err));
+            return;
+        }
         if (fileList.length % 10 === 0) {
             dom.statusBar.textContent = 'Reading folder: found ' + fileList.length + ' files...';
         }
     } else if (item.isDirectory) {
-        const dirReader = item.createDirectoryReader ? item.createDirectoryReader() : item.createReader();
         let entries = [];
-        while (true) {
-            const batch = await new Promise((resolve) => dirReader.readEntries(resolve));
-            if (batch.length === 0) break;
-            entries.push(...batch);
+        try {
+            const dirReader = item.createDirectoryReader ? item.createDirectoryReader() : item.createReader();
+            while (true) {
+                const batch = await new Promise((resolve) => dirReader.readEntries(resolve));
+                if (batch.length === 0) break;
+                entries.push(...batch);
+            }
+        } catch (err) {
+            showFileError(currentPath, 'Failed to read directory: ' + (err.message || err));
+            return;
         }
         for (const entry of entries) await traverseFileTree(entry, fileList, currentPath);
     }
 }
 
 async function extractAllFromZip(zipFile) {
+    if (zipFile.size > state.MAX_ZIP_FILE_SIZE) {
+        showFileError(zipFile.name, 'ZIP too large (' + (zipFile.size / 1024 / 1024).toFixed(1) + ' MB)');
+        return [];
+    }
+
     const sizeMB = (zipFile.size / (1024 * 1024)).toFixed(1);
     dom.statusBar.textContent = sizeMB + ' MB - Unzipping ' + zipFile.name + '...';
-    const zip = await window.JSZip.loadAsync(zipFile);
+
+    let zip;
+    try {
+        zip = await window.JSZip.loadAsync(zipFile);
+    } catch (err) {
+        showFileError(zipFile.name, 'Failed to open ZIP: ' + (err.message || err));
+        return [];
+    }
 
     const entries = [];
     zip.forEach((path, entry) => {
         if (!entry.dir && getFileType(path)) entries.push({ path, entry });
     });
 
-    const total = entries.length;
+    entries.sort((a, b) => (a.entry._data && a.entry._data.uncompressedSize || 0) - (b.entry._data && b.entry._data.uncompressedSize || 0));
+
+    const total = Math.min(entries.length, state.MAX_TOTAL_FILES);
     const concurrency = Math.min(navigator.hardwareConcurrency || 4, 8);
     const extracted = [];
     let done = 0;
+    let zipErrors = 0;
 
     function updateProgress() {
         done++;
@@ -344,20 +414,40 @@ async function extractAllFromZip(zipFile) {
 
     for (let i = 0; i < total; i += concurrency) {
         const batch = entries.slice(i, i + concurrency);
-        const results = await Promise.all(batch.map(async ({ path, entry }) => {
+        const results = await Promise.allSettled(batch.map(async ({ path, entry }) => {
             const blob = await entry.async('blob');
             return { blob, path, type: getFileType(path) };
         }));
-        for (const { blob, path, type } of results) {
+        for (const result of results) {
+            if (result.status === 'rejected') {
+                zipErrors++;
+                continue;
+            }
+            const { blob, path, type } = result.value;
+            const sizeLimit = type === 'pdf' ? state.MAX_FILE_SIZE : state.MAX_DOC_FILE_SIZE;
+            if (blob.size > sizeLimit) {
+                updateProgress();
+                continue;
+            }
             let mimeType = 'application/pdf';
             if (type === 'docx') mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
             else if (type === 'doc') mimeType = 'application/msword';
             const file = new File([blob], path, { type: mimeType });
             file.relativePath = path;
-            file._cachedBuffer = await blob.arrayBuffer();
+            try {
+                file._cachedBuffer = await blob.arrayBuffer();
+            } catch (err) {
+                showFileError(path, 'Failed to read entry from ZIP: ' + (err.message || err));
+                updateProgress();
+                continue;
+            }
             extracted.push(file);
             updateProgress();
         }
+    }
+
+    if (zipErrors > 0) {
+        showFileError(zipFile.name, zipErrors + ' entry(s) failed to extract from ZIP');
     }
 
     return extracted;
@@ -384,6 +474,7 @@ export async function rescanAllDocuments() {
 
     initWorkerPool();
     const keywords = window.KEYWORDS || [];
+    let failedCount = 0;
 
     for (let i = 0; i < state.objectUrls.length; i++) {
         const url = state.objectUrls[i];
@@ -405,7 +496,9 @@ export async function rescanAllDocuments() {
                     fn.renderNoMatchCard(displayName, url);
                 }
             } catch (err) {
-                console.error('[Worker] PDF rescan error:', err);
+                const name = pdfCached.fileName || url.split('/').pop();
+                showFileError(name, 'Rescan PDF worker error: ' + (err.message || err));
+                failedCount++;
             }
         } else {
             const docCached = state.docContentCache[url];
@@ -425,7 +518,9 @@ export async function rescanAllDocuments() {
                         fn.renderNoMatchCard(displayName, url);
                     }
                 } catch (err) {
-                    console.error('[Worker] DOCX rescan error:', err);
+                    const name = docCached.fileName || url.split('/').pop();
+                    showFileError(name, 'Rescan DOCX worker error: ' + (err.message || err));
+                    failedCount++;
                 }
             }
         }
@@ -437,7 +532,9 @@ export async function rescanAllDocuments() {
 
     fn.updateStats();
 
-    if (state.totalMatchesFound === 0) {
+    if (failedCount > 0) {
+        dom.statusBar.textContent = failedCount + ' document(s) failed during rescan';
+    } else if (state.totalMatchesFound === 0) {
         dom.statusBar.textContent = 'No matches found';
     } else {
         dom.statusBar.textContent = state.totalMatchesFound + ' matches across ' + state.totalDocsFound + ' document' + (state.totalDocsFound !== 1 ? 's' : '');
@@ -515,7 +612,11 @@ dom.folderInput.addEventListener('change', async (e) => {
     for (const file of items) {
         const type = getFileType(file.name);
         if (file.name.toLowerCase().endsWith('.zip')) {
-            filesToProcess = filesToProcess.concat(await extractAllFromZip(file));
+            try {
+                filesToProcess = filesToProcess.concat(await extractAllFromZip(file));
+            } catch (err) {
+                showFileError(file.name, 'Failed to process ZIP: ' + (err.message || err));
+            }
         } else if (type) {
             file.relativePath = file.webkitRelativePath || file.name;
             filesToProcess.push(file);

@@ -1,6 +1,7 @@
 import * as esbuild from 'esbuild';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -18,6 +19,11 @@ await esbuild.build({
     define: { 'process.env.NODE_ENV': '"production"' },
 });
 
+const bundleHash = crypto.createHash('md5')
+    .update(fs.readFileSync(path.join(dist, 'bundle.js')))
+    .digest('hex')
+    .slice(0, 8);
+
 function copy(src, dest) { fs.cpSync(path.join(__dirname, src), path.join(dist, dest), { recursive: true }); }
 
 copy('src/style.css', 'style.css');
@@ -29,8 +35,11 @@ let html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 html = html.replaceAll('dist/', '');
 fs.writeFileSync(path.join(dist, 'index.html'), html);
 
-copy('service_worker.js', 'service_worker.js');
+let sw = fs.readFileSync(path.join(__dirname, 'service_worker.js'), 'utf8');
+sw = sw.replace('__CACHE_VERSION__', bundleHash);
+fs.writeFileSync(path.join(dist, 'service_worker.js'), sw);
+
 copy('node_modules/pdfjs-dist/build/pdf.worker.min.js', 'pdf.worker.min.js');
 copy('src/doc_processor_worker.js', 'utils/doc_processor_worker.js');
 
-console.log('Build complete: dist/bundle.js + dist/pdf.worker.min.js');
+console.log('Build complete: dist/bundle.js + dist/pdf.worker.min.js [cache:' + bundleHash + ']');

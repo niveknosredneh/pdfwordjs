@@ -259,7 +259,7 @@ body {
 
 .progress-svg-wrap { display: inline-flex; align-items: center; width: 21px; height: 21px; pointer-events: none; flex-shrink: 0; }
 .progress-svg-wrap svg { width: 100%; height: 100%; display: block; }
-.status-bar { font-size: 0.65rem; color: var(--grey-400); margin-top: 1px; padding: 0 1px; min-height: 18px; font-family: 'Courier New', monospace; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.status-bar { font-size: 0.65rem; color: var(--grey-400); margin-top: 1px; padding: 0 1px; min-height: 18px; font-family: 'Courier New', monospace; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; display: flex; justify-content: space-between; }
 #viewerDropMsg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--grey-500); font-size: 1.1rem; text-align: center; pointer-events: none; opacity: 0.5; }
 
 .results-area { flex: 1; overflow-y: auto; padding: 12px; }
@@ -388,6 +388,35 @@ body {
 .tree-child:hover {
     background: var(--green-bg);
     color: var(--green-light);
+}
+
+/* Tree connecting lines — 90° bend at each child */
+.tree-nested > li:not(.tree-child) {
+    position: relative;
+}
+
+.tree-nested > li:not(.tree-child)::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: -16px;
+    bottom: 50%;
+    width: 1px;
+    background: var(--grey-600);
+}
+
+.tree-nested > li:not(.tree-child):first-child::before {
+    top: -24px;
+}
+
+.tree-nested > li:not(.tree-child)::after {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 50%;
+    width: 6px;
+    height: 1px;
+    background: var(--grey-600);
 }
 
 .doc-card {

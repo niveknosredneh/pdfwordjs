@@ -631,9 +631,27 @@ body {
 .page-placeholder {
     position: relative; margin: 16px auto; background: var(--page-bg);
     display: flex; align-items: center; justify-content: center;
-    color: var(--grey-400); font-size: 0.85rem;
     width: calc(var(--base-w, 600) * var(--pdf-scale, 1.0) * 1px);
     height: calc(var(--base-h, 800) * var(--pdf-scale, 1.0) * 1px);
+    overflow: hidden;
+}
+.page-placeholder::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%);
+    animation: placeholder-shimmer 1.8s ease-in-out infinite;
+    pointer-events: none;
+}
+@keyframes placeholder-shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.pdf-page {
+    transition: box-shadow 0.2s;
+}
+.pdf-page canvas {
+    transition: opacity 0.15s ease-in;
 }
 
 .nav-clear {

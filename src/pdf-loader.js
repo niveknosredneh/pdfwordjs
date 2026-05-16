@@ -66,7 +66,9 @@ function loadPDF(fileUrl, keyword = '') {
             dom.loaderProgressFill.style.width = '30%';
             await fn.setupVirtualPages();
 
-            if (!fn.isPageRendered(1)) fn.renderPageNow(1);
+            dom.loaderStatus.textContent = 'Rendering first page...';
+            dom.loaderProgressFill.style.width = '45%';
+            if (!fn.isPageRendered(1)) await fn.renderPageNow(1);
 
             dom.loaderStatus.textContent = 'Extracting text content...';
             dom.loaderProgressFill.style.width = '60%';

@@ -12,6 +12,10 @@ state.renderQueueBusy = false;
 state.renderTasks = new Set();
 state.pendingRenders = new Set();
 
+const LOW_RES_SCALE = 0.2;
+const RENDER_CONCURRENCY = 4;
+const YIELD_INTERVAL = 2;
+
 export async function setupVirtualPages() {
     dom.viewer.innerHTML = '';
     state.pageHeights = {};
@@ -42,61 +46,92 @@ export async function setupVirtualPages() {
         placeholder.dataset.pageNum = pageNum;
         placeholder.style.setProperty('--base-w', viewport.width);
         placeholder.style.setProperty('--base-h', viewport.height);
-        placeholder.textContent = 'Page ' + pageNum;
         dom.viewer.appendChild(placeholder);
     }
 
     setupPageObserver();
+    renderAllPagesLowRes();
+}
+
+async function renderAllPagesLowRes() {
+    const batchSize = Math.max(1, (navigator.hardwareConcurrency || 4) >> 1);
+    for (let i = 1; i <= state.totalPages; i += batchSize) {
+        const batch = [];
+        for (let j = i; j < Math.min(i + batchSize, state.totalPages + 1); j++) {
+            if ((state.renderedScales[j] || 0) < LOW_RES_SCALE) {
+                batch.push(renderPageNow(j, LOW_RES_SCALE).catch(() => {}));
+            }
+        }
+        if (batch.length) await Promise.all(batch);
+        if (i + batchSize <= state.totalPages) {
+            await new Promise(r => setTimeout(r, 0));
+        }
+    }
 }
 
 function setupPageObserver() {
     if (state.pageObserver) state.pageObserver.disconnect();
 
     state.pageObserver = new IntersectionObserver((entries) => {
-        const visiblePages = getVisiblePages();
+        const ranges = getViewportRange();
         let added = false;
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 const pageNum = parseInt(entry.target.dataset.pageNum);
-                if (!pageNum || isPageRendered(pageNum)) return;
+                if (!pageNum) return;
 
-                if (visiblePages.has(pageNum)) {
+                const currentBest = state.renderedScales[pageNum] || 0;
+                if (currentBest >= state.currentScale) return;
+
+                if (ranges.visible.has(pageNum)) {
                     renderPageNow(pageNum);
-                } else if (!state.renderQueue.includes(pageNum)) {
-                    state.renderQueue.push(pageNum);
-                    added = true;
+                } else {
+                    const priority = getPagePriority(pageNum, ranges);
+                    if (!state.renderQueue.some(q => q.pageNum === pageNum)) {
+                        state.renderQueue.push({ pageNum, priority });
+                        added = true;
+                    }
                 }
             }
         });
         if (added) processRenderQueue();
-    }, { root: dom.viewerScroll, rootMargin: '500px' });
+    }, { root: dom.viewerScroll, rootMargin: '800px' });
 
     document.querySelectorAll('[id^="page-"]').forEach(el => state.pageObserver.observe(el));
 }
 
-const RENDER_CONCURRENCY = 4;
-const YIELD_INTERVAL = 2;
-
-function getVisiblePages() {
+function getViewportRange() {
     const scrollTop = dom.viewerScroll.scrollTop;
     const scrollBottom = scrollTop + dom.viewerScroll.clientHeight;
+    const viewH = dom.viewerScroll.clientHeight;
+    const ranges = { visible: new Set(), near: new Set(), far: new Set() };
     let top = 16;
-    const visible = new Set();
     for (let i = 1; i <= state.totalPages; i++) {
         const h = (state.pageHeights[i] || 800) * state.currentScale;
         const bottom = top + h;
-        if (bottom > scrollTop && top < scrollBottom) visible.add(i);
+        const pageMid = (top + bottom) / 2;
+        if (bottom > scrollTop && top < scrollBottom) {
+            ranges.visible.add(i);
+        } else if (pageMid > scrollTop - viewH && pageMid < scrollBottom + viewH) {
+            ranges.near.add(i);
+        } else if (pageMid > scrollTop - viewH * 3 && pageMid < scrollBottom + viewH * 3) {
+            ranges.far.add(i);
+        }
         top = bottom + 32;
     }
-    return visible;
+    return ranges;
 }
 
-function queuePage(pageNum, visiblePages) {
-    if (visiblePages.has(pageNum)) {
-        state.renderQueue.unshift(pageNum);
-    } else {
-        state.renderQueue.push(pageNum);
-    }
+function getPagePriority(pageNum, ranges) {
+    if (ranges.visible.has(pageNum)) return 0;
+    if (ranges.near.has(pageNum)) return 1;
+    if (ranges.far.has(pageNum)) return 2;
+    return 3;
+}
+
+function queuePage(pageNum, ranges) {
+    const priority = getPagePriority(pageNum, ranges);
+    state.renderQueue.push({ pageNum, priority });
 }
 
 async function processRenderQueue() {
@@ -105,20 +140,41 @@ async function processRenderQueue() {
     let renderCount = 0;
     try {
         while (state.renderQueue.length > 0) {
-            const visiblePages = getVisiblePages();
-            state.renderQueue.sort((a, b) => {
-                const aVis = visiblePages.has(a) ? 0 : 1;
-                const bVis = visiblePages.has(b) ? 0 : 1;
-                return aVis - bVis;
-            });
+            const ranges = getViewportRange();
+
+            // Recompute visibility fresh each iteration — visible pages first
+            const visible = [];
+            const offscreen = [];
+            for (const item of state.renderQueue) {
+                if (ranges.visible.has(item.pageNum)) {
+                    visible.push(item);
+                } else {
+                    offscreen.push(item);
+                }
+            }
+            state.renderQueue = [...visible, ...offscreen];
 
             const batch = [];
             while (batch.length < RENDER_CONCURRENCY && state.renderQueue.length > 0) {
-                const pn = state.renderQueue.shift();
-                if (!isPageRendered(pn)) batch.push(pn);
+                const item = state.renderQueue.shift();
+                const pn = item.pageNum;
+                const currentBest = state.renderedScales[pn] || 0;
+                if (currentBest >= state.currentScale) continue;
+                if (state.pendingRenders.has(pn)) {
+                    state.renderQueue.push(item);
+                    continue;
+                }
+                batch.push(pn);
             }
-            if (batch.length === 0) continue;
-            await Promise.all(batch.map(pn => renderPageNow(pn)));
+            if (batch.length === 0) {
+                if (state.renderQueue.length > 0) {
+                    await new Promise(r => setTimeout(r, 100));
+                }
+                continue;
+            }
+
+            await Promise.all(batch.map(pn => renderPageNow(pn).catch(() => {})));
+
             renderCount += batch.length;
             if (renderCount % YIELD_INTERVAL === 0) {
                 await new Promise(r => setTimeout(r, 0));
@@ -134,11 +190,12 @@ export function startBgRender() {
     if (!state.pdfDoc) return;
     cancelBgRender();
 
-    const visiblePages = getVisiblePages();
+    const ranges = getViewportRange();
     for (let i = 1; i <= state.totalPages; i++) {
-        if (!isPageRendered(i) && !state.renderQueue.includes(i)) {
-            queuePage(i, visiblePages);
-        }
+        const currentBest = state.renderedScales[i] || 0;
+        if (currentBest >= state.currentScale) continue;
+        const priority = getPagePriority(i, ranges);
+        state.renderQueue.push({ pageNum: i, priority });
     }
 
     processRenderQueue();
@@ -184,11 +241,12 @@ export async function renderPageNow(pageNum, forceScale = null) {
     const dpr = window.devicePixelRatio || 1;
     const effectiveScale = renderScale * dpr;
 
-    if (state.renderedPages.has(pageNum) && !forceScale) return;
+    if ((state.renderedScales[pageNum] || 0) >= renderScale) return;
     if (!state.pdfDoc) return;
     if (state.pendingRenders.has(pageNum)) return;
 
     state.pendingRenders.add(pageNum);
+    const wasUpgrade = (state.renderedScales[pageNum] || 0) > 0;
     try {
         const page = await state.pdfDoc.getPage(pageNum);
         const viewport = page.getViewport({ scale: effectiveScale });
@@ -200,9 +258,10 @@ export async function renderPageNow(pageNum, forceScale = null) {
         const displayHeight = viewport.height / dpr;
 
         el.className = 'pdf-page';
-        const hasCanvas = !!el.querySelector('canvas');
+        const existingCanvas = el.querySelector('canvas');
+        const hasCanvas = !!existingCanvas;
         if (!hasCanvas) {
-            el.innerHTML = '<div class="page-loading"><div class="spinner"></div>Loading...</div>';
+            el.innerHTML = '<div class="page-loading"><div class="spinner"></div></div>';
         }
         const vp1 = page.getViewport({ scale: 1.0 });
         el.style.setProperty('--base-w', vp1.width);
@@ -238,7 +297,6 @@ export async function renderPageNow(pageNum, forceScale = null) {
         state.renderedPages.add(pageNum);
         state.renderedScales[pageNum] = Math.max(state.renderedScales[pageNum] || 0, renderScale);
 
-        const existingCanvas = el.querySelector('canvas');
         if (existingCanvas && existingCanvas !== canvas) existingCanvas.remove();
         if (hasCanvas) {
             el.appendChild(canvas);
@@ -260,11 +318,19 @@ export async function renderPageNow(pageNum, forceScale = null) {
             requestAnimationFrame(() => buildTextLayer(el, pageNum, renderScale, displayHeight));
             if (state.searchResults.length > 0) fn.renderHighlightsForPage(pageNum);
         }
+
+        if (renderScale < state.currentScale) {
+            const ranges = getViewportRange();
+            if (ranges.visible.has(pageNum) && (state.renderedScales[pageNum] || 0) < state.currentScale) {
+                setTimeout(() => renderPageNow(pageNum), 0);
+            }
+        }
     } catch (err) {
-        state.renderedPages.delete(pageNum);
+        if (!wasUpgrade) state.renderedPages.delete(pageNum);
         if (err.name !== 'RenderingCancelledException') console.warn('Render error:', err.message);
     } finally {
         state.pendingRenders.delete(pageNum);
+        processRenderQueue();
     }
 }
 
@@ -288,7 +354,6 @@ export function setZoom(newScale, force = false) {
         }
     }
 
-    // If viewport center is between pages, anchor to nearest
     if (!anchorEl) {
         let minDist = Infinity;
         for (const el of document.querySelectorAll('[id^="page-"]')) {
@@ -301,10 +366,14 @@ export function setZoom(newScale, force = false) {
         }
     }
 
+    const oldScale = state.currentScale;
     state.currentScale = clampedScale;
     fn.updateZoomDisplay();
     document.documentElement.style.setProperty('--pdf-scale', clampedScale);
 
+    const scaleRatio = clampedScale / oldScale;
+
+    // CSS-resize all existing canvases for instant visual feedback
     for (let i = 1; i <= state.totalPages; i++) {
         const el = document.getElementById('page-' + i);
         if (!el) continue;
@@ -317,15 +386,39 @@ export function setZoom(newScale, force = false) {
         canvas.style.height = (baseH * clampedScale) + 'px';
     }
 
+    // Cancel in-flight renders, but keep existing canvases in the DOM
     for (const t of state.renderTasks) {
         try { t.cancel(); } catch (e) {}
     }
     state.renderTasks.clear();
-
-    state.renderedPages.clear();
-    state.renderedScales = {};
-    state.renderQueue = [];
     state.pendingRenders.clear();
+    state.renderQueue = [];
+
+    // Mark visible pages for re-render at new scale (invalidate their cache entry)
+    const ranges = getViewportRange();
+    for (const pn of ranges.visible) {
+        state.renderedScales[pn] = 0;
+    }
+    // For near/far pages, downgrade cache to low-res so they get upgraded when scrolled to
+    for (const pn of ranges.near) {
+        if ((state.renderedScales[pn] || 0) > 0 && (state.renderedScales[pn] || 0) < state.currentScale) {
+            state.renderedScales[pn] = LOW_RES_SCALE;
+        }
+    }
+
+    // Re-render visible pages at new scale immediately
+    for (const pn of ranges.visible) {
+        renderPageNow(pn);
+    }
+
+    fn.clearHighlights();
+    if (state.pageObserver) {
+        state.pageObserver.disconnect();
+        setupPageObserver();
+    }
+    if (state.searchResults.length > 0) fn.renderAllHighlights();
+    fn.renderPageHeatmaps();
+    startBgRender();
 
     if (anchorEl) {
         requestAnimationFrame(() => {
@@ -333,26 +426,7 @@ export function setZoom(newScale, force = false) {
             const newH = anchorEl.offsetHeight;
             dom.viewerScroll.scrollTop = Math.max(0, newTop + anchorOffset * newH - dom.viewerScroll.clientHeight / 2);
             dom.viewerScroll.scrollLeft = oldScrollLeft;
-
-            fn.clearHighlights();
-            if (state.pageObserver) {
-                state.pageObserver.disconnect();
-                setupPageObserver();
-            }
-            if (state.searchResults.length > 0) fn.renderAllHighlights();
-            fn.renderPageHeatmaps();
-            startBgRender();
         });
-    } else {
-        dom.viewerScroll.scrollLeft = oldScrollLeft;
-        fn.clearHighlights();
-        if (state.pageObserver) {
-            state.pageObserver.disconnect();
-            setupPageObserver();
-        }
-        if (state.searchResults.length > 0) fn.renderAllHighlights();
-        fn.renderPageHeatmaps();
-        startBgRender();
     }
 }
 
@@ -360,12 +434,13 @@ export function startPrerender() {
     if (state.searchResults.length === 0) return;
 
     const pagesWithMatches = [...new Set(state.searchResults.map(r => r.page))];
-    const visiblePages = getVisiblePages();
+    const ranges = getViewportRange();
 
     for (const pageNum of pagesWithMatches) {
-        if (!isPageRendered(pageNum) && !state.renderQueue.includes(pageNum)) {
-            queuePage(pageNum, visiblePages);
-        }
+        const currentBest = state.renderedScales[pageNum] || 0;
+        if (currentBest >= state.currentScale) continue;
+        if (state.renderQueue.some(q => q.pageNum === pageNum)) continue;
+        state.renderQueue.push({ pageNum, priority: getPagePriority(pageNum, ranges) });
     }
     processRenderQueue();
 }

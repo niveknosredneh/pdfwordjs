@@ -24,7 +24,6 @@ import * as ui from './ui.js';
 import * as keywords from './keywords.js';
 
 register('setupVirtualPages', pdfRenderer.setupVirtualPages);
-register('cancelBgRender', pdfRenderer.cancelBgRender);
 register('isPageRendered', pdfRenderer.isPageRendered);
 register('renderPageNow', pdfRenderer.renderPageNow);
 register('setZoom', pdfRenderer.setZoom);

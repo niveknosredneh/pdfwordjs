@@ -152,6 +152,7 @@ export async function performSearch(query) {
 
     if (state.searchCache[canonicalQuery] !== undefined) {
         state.searchResults = state.searchCache[canonicalQuery];
+        buildSearchResultsByPage();
         state.activeKeyword = canonicalQuery;
         state.currentMatchIndex = 0;
         showSearchResults();
@@ -165,6 +166,7 @@ export async function performSearch(query) {
 
     await computeSearchForQuery(canonicalQuery);
     state.searchResults = state.searchCache[canonicalQuery] || [];
+    buildSearchResultsByPage();
 
     showSearchResults();
 }
@@ -200,6 +202,7 @@ export function cycleSearch(query) {
 
     if (state.searchCache[query] !== undefined) {
         state.searchResults = state.searchCache[query];
+        buildSearchResultsByPage();
         state.activeKeyword = query;
 
         if (state.searchResults.length > 0) {
@@ -229,56 +232,55 @@ export function cycleSearch(query) {
 export function renderAllHighlights() {
     clearHighlights();
 
-    const pageFragments = {};
-
-    for (let i = 0; i < state.searchResults.length; i++) {
-        const result = state.searchResults[i];
-        const pageKey = 'page-' + result.page;
-
-        if (!pageFragments[pageKey]) {
-            const pageEl = document.getElementById(pageKey);
-            if (!pageEl) continue;
-            pageFragments[pageKey] = { el: pageEl, fragment: document.createDocumentFragment() };
-        }
-
-        const mark = document.createElement('div');
-        mark.className = 'highlight-mark' + (i === state.currentMatchIndex ? ' current' : '');
-        mark.style.left = (result.x * state.currentScale) + 'px';
-        mark.style.top = (result.y * state.currentScale) + 'px';
-        mark.style.width = (result.width * state.currentScale) + 'px';
-        mark.style.height = (result.height * state.currentScale) + 'px';
-
-        pageFragments[pageKey].fragment.appendChild(mark);
-    }
-
-    for (const key in pageFragments) {
-        pageFragments[key].el.appendChild(pageFragments[key].fragment);
+    for (const pageNum in state.searchResultsByPage) {
+        const pageEl = document.getElementById('page-' + pageNum);
+        if (!pageEl) continue;
+        const fragment = document.createDocumentFragment();
+        state.searchResultsByPage[pageNum].forEach(({ result, globalIndex }) => {
+            const mark = document.createElement('div');
+            mark.className = 'highlight-mark' + (globalIndex === state.currentMatchIndex ? ' current' : '');
+            mark.style.left = (result.x * state.currentScale) + 'px';
+            mark.style.top = (result.y * state.currentScale) + 'px';
+            mark.style.width = (result.width * state.currentScale) + 'px';
+            mark.style.height = (result.height * state.currentScale) + 'px';
+            fragment.appendChild(mark);
+        });
+        pageEl.appendChild(fragment);
     }
 }
 
 export function renderHighlightsForPage(pageNum) {
     const pageEl = document.getElementById('page-' + pageNum);
     if (!pageEl) return;
+    pageEl.querySelectorAll('.highlight-mark').forEach(el => el.remove());
+
+    const results = state.searchResultsByPage[pageNum];
+    if (!results) return;
 
     const fragment = document.createDocumentFragment();
-
-    state.searchResults.forEach((result, index) => {
-        if (result.page === pageNum) {
-            const mark = document.createElement('div');
-            mark.className = 'highlight-mark' + (index === state.currentMatchIndex ? ' current' : '');
-            mark.style.left = (result.x * state.currentScale) + 'px';
-            mark.style.top = (result.y * state.currentScale) + 'px';
-            mark.style.width = (result.width * state.currentScale) + 'px';
-            mark.style.height = (result.height * state.currentScale) + 'px';
-            fragment.appendChild(mark);
-        }
+    results.forEach(({ result, globalIndex }) => {
+        const mark = document.createElement('div');
+        mark.className = 'highlight-mark' + (globalIndex === state.currentMatchIndex ? ' current' : '');
+        mark.style.left = (result.x * state.currentScale) + 'px';
+        mark.style.top = (result.y * state.currentScale) + 'px';
+        mark.style.width = (result.width * state.currentScale) + 'px';
+        mark.style.height = (result.height * state.currentScale) + 'px';
+        fragment.appendChild(mark);
     });
-
     pageEl.appendChild(fragment);
 }
 
 export function clearHighlights() {
     dom.viewer.querySelectorAll('.highlight-mark').forEach(el => el.remove());
+}
+
+function buildSearchResultsByPage() {
+    const byPage = {};
+    state.searchResults.forEach((r, i) => {
+        if (!byPage[r.page]) byPage[r.page] = [];
+        byPage[r.page].push({ result: r, globalIndex: i });
+    });
+    state.searchResultsByPage = byPage;
 }
 
 export function renderPageHeatmaps() {}

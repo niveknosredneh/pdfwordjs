@@ -19,6 +19,7 @@ let customSearchIndex = 0;
 export function clearSearch() {
     state.activeKeyword = '';
     state.searchResults = [];
+    state.searchResultsByPage = {};
     state.currentMatchIndex = -1;
     dom.navGroup.classList.remove('active');
     dom.navSep.style.display = 'none';

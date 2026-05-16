@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import * as dom from './dom.js';
 import { fn } from './cross.js';
+import { evictCaches } from './file-handler.js';
 
 function getDocTypeFromUrl(url) {
     const dataCached = state.docDataCache[url];
@@ -32,7 +33,6 @@ function loadPDF(fileUrl, keyword = '') {
     }
 
     state.currentDocUrl = fileUrl;
-    fn.cancelBgRender();
 
     if (state.pdfDoc) {
         try { state.pdfDoc.destroy(); } catch (e) { console.warn('Error destroying previous PDF:', e); }
@@ -76,19 +76,29 @@ function loadPDF(fileUrl, keyword = '') {
             if (!cached) {
                 dom.loaderFilename.textContent = 'Extracting text from loaded PDF...';
                 const pageTextData = [];
+                const extractPromises = [];
                 for (let p = 1; p <= state.totalPages; p++) {
-                    const page = await state.pdfDoc.getPage(p);
-                    const content = await page.getTextContent();
-                    const vp = page.getViewport({ scale: 1.0 });
+                    extractPromises.push(
+                        state.pdfDoc.getPage(p).then(page =>
+                            page.getTextContent().then(content => ({
+                                pageNum: p,
+                                content,
+                                viewport: page.getViewport({ scale: 1.0 })
+                            }))
+                        )
+                    );
+                }
+                const allResults = await Promise.all(extractPromises);
+                for (const { pageNum, content, viewport } of allResults) {
                     let pageText = '';
                     const textItems = [];
                     for (const item of content.items) {
                         pageText += item.str;
                         textItems.push({ text: item.str, transform: item.transform, width: item.width, height: item.height });
                     }
-                    pageTextData.push({ text: pageText, viewport: { width: vp.width, height: vp.height }, items: textItems });
-                    dom.loaderProgressFill.style.width = Math.round(60 + (p / state.totalPages) * 20) + '%';
+                    pageTextData.push({ text: pageText, viewport: { width: viewport.width, height: viewport.height }, items: textItems });
                 }
+                dom.loaderProgressFill.style.width = '80%';
                 const fileName = state.docDataCache[fileUrl]?.name || 'Document';
                 cached = {
                     totalPages: state.totalPages,
@@ -99,6 +109,7 @@ function loadPDF(fileUrl, keyword = '') {
                 };
                 state.docTextCache[fileUrl] = cached;
                 state.totalCacheSize += cached._size;
+                evictCaches();
             }
             if (cached) {
                 cached._lastAccess = Date.now();

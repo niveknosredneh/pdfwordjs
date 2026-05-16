@@ -229,7 +229,7 @@ export async function renderPageNow(pageNum, forceScale = null) {
 
         if (state.textPageCache[pageNum]) {
             requestAnimationFrame(() => buildTextLayer(el, pageNum, renderScale, displayHeight));
-            if (state.searchResults.length > 0) fn.renderHighlightsForPage(pageNum);
+            if (!forceScale && state.searchResults.length > 0) fn.renderHighlightsForPage(pageNum);
         }
     } catch (err) {
         if (err.name !== 'RenderingCancelledException') console.warn('Render error:', err.message);
@@ -270,8 +270,6 @@ function buildTextLayer(el, pageNum, renderScale, displayHeight) {
 export function isPageRendered(pageNum) {
     return state.renderedPages.has(pageNum);
 }
-
-export function cancelBgRender() {}
 
 export function setRenderQuality(q) {
     state.renderQuality = q;

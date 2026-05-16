@@ -71,7 +71,7 @@ function showFileError(fileName, message) {
     console.warn('[File]', fileName, '-', message);
 }
 
-function evictCaches() {
+export function evictCaches() {
     const allEntries = [];
 
     Object.entries(state.docTextCache).forEach(([key, entry]) => {

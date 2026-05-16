@@ -14,7 +14,6 @@ export function loadDocxDoc(fileUrl, keyword = '') {
         return;
     }
 
-    fn.cancelBgRender();
     state.currentDocUrl = fileUrl;
     const cachedInfo = state.docContentCache[fileUrl];
     state.currentDocType = cachedInfo?.type || getDocTypeFromUrl(fileUrl);

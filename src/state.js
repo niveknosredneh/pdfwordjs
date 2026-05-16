@@ -9,6 +9,7 @@ export const state = {
 
     activeKeyword: '',
     searchResults: [],
+    searchResultsByPage: {},
     currentMatchIndex: -1,
     searchCache: {},
 

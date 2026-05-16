@@ -751,7 +751,7 @@ window.addEventListener('beforeunload', () => {
     }
 });
 
-dom.statusBar.textContent = 'Ready';
+dom.statusBar.innerHTML = '<span>Ready</span><span>#__BUNDLE_HASH__ __COMMIT_DATE__</span>';
 
 (function initTheme() {
     const savedTheme = localStorage.getItem('pdf_theme');

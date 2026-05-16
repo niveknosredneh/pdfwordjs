@@ -28,8 +28,8 @@ async function initProgressBar() {
         const d = srcPath.getAttribute('d');
         const vb = svgDoc.documentElement.getAttribute('viewBox') || '0 0 1000 1000';
         container.innerHTML = '<svg viewBox="' + vb + '" preserveAspectRatio="xMidYMid meet">'
-            + '<path d="' + d + '" fill="none" stroke="var(--grey-500)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />'
-            + '<path id="progressBar-svg-path" d="' + d + '" fill="none" stroke="#8cc63f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />'
+            + '<path d="' + d + '" fill="none" stroke="var(--grey-500)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.05" />'
+            + '<path id="progressBar-svg-path" d="' + d + '" fill="none" stroke="var(--green)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.5" />'
             + '</svg>';
         if (typeof ProgressBar !== 'undefined') {
             _progressPb = new ProgressBar.Path('#progressBar-svg-path', { duration: 500, easing: 'easeInOut' });

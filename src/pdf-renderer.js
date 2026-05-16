@@ -84,7 +84,12 @@ function setupPageObserver() {
                 if (currentBest >= state.currentScale) return;
 
                 if (ranges.visible.has(pageNum)) {
-                    renderPageNow(pageNum);
+                    if ((state.renderedScales[pageNum] || 0) >= state.currentScale) return;
+                    if ((state.renderedScales[pageNum] || 0) > 0) {
+                        renderPageNow(pageNum);
+                    } else {
+                        renderPageNow(pageNum, LOW_RES_SCALE);
+                    }
                 } else {
                     const priority = getPagePriority(pageNum, ranges);
                     if (!state.renderQueue.some(q => q.pageNum === pageNum)) {
@@ -155,7 +160,9 @@ async function processRenderQueue() {
             state.renderQueue = [...visible, ...offscreen];
 
             const batch = [];
-            while (batch.length < RENDER_CONCURRENCY && state.renderQueue.length > 0) {
+            let remaining = state.renderQueue.length;
+            while (batch.length < RENDER_CONCURRENCY && state.renderQueue.length > 0 && remaining > 0) {
+                remaining--;
                 const item = state.renderQueue.shift();
                 const pn = item.pageNum;
                 const currentBest = state.renderedScales[pn] || 0;

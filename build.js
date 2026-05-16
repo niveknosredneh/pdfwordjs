@@ -3,12 +3,18 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.join(__dirname, 'dist');
 
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
+
+let commitDate = '';
+try {
+    commitDate = execSync('git log -1 --format=%cd --date=format-local:%Y-%m-%d', { encoding: 'utf8', cwd: __dirname }).trim();
+} catch (e) { /* not a git repo or no git */ }
 
 await esbuild.build({
     entryPoints: [path.join(__dirname, 'src/index.js')],
@@ -23,6 +29,10 @@ const bundleHash = crypto.createHash('md5')
     .update(fs.readFileSync(path.join(dist, 'bundle.js')))
     .digest('hex')
     .slice(0, 8);
+
+let bundle = fs.readFileSync(path.join(dist, 'bundle.js'), 'utf8');
+bundle = bundle.replace('__BUNDLE_HASH__', bundleHash).replace('__COMMIT_DATE__', commitDate);
+fs.writeFileSync(path.join(dist, 'bundle.js'), bundle);
 
 function copy(src, dest) { fs.cpSync(path.join(__dirname, src), path.join(dist, dest), { recursive: true }); }
 

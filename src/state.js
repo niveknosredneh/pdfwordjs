@@ -47,6 +47,8 @@ export const state = {
     touchStartDist: 0,
     touchStartScale: 1.0,
 
+    renderQuality: 'medium',
+
     customSearchResults: [],
     customSearchIndex: 0,
 

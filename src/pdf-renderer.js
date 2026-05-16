@@ -59,17 +59,6 @@ function setupPageObserver() {
     document.querySelectorAll('[id^="page-"]').forEach(el => state.pageObserver.observe(el));
 }
 
-// ── scroll-end safety net ──
-
-let refreshTimer = null;
-dom.viewerScroll.addEventListener('scroll', () => {
-    if (refreshTimer) clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(() => {
-        refreshTimer = null;
-        refreshVisiblePages();
-    }, 300);
-}, { passive: true });
-
 // ── viewport range helper (used by setZoom) ──
 
 function getViewportRange() {
@@ -96,6 +85,17 @@ function getViewportRange() {
 
 // ── cancel helpers ──
 
+function cancelNonVisibleRenders(visibleSet) {
+    for (const [pn, t] of state.renderTasks) {
+        if (!visibleSet.has(pn)) {
+            if (t && typeof t.cancel === 'function') {
+                try { t.cancel(); } catch (e) {}
+            }
+            state.renderTasks.delete(pn);
+        }
+    }
+}
+
 function cancelAllRenders() {
     for (const [pn, t] of state.renderTasks) {
         if (t && typeof t.cancel === 'function') {
@@ -108,10 +108,7 @@ function cancelAllRenders() {
 // ── the single coordinator ──
 
 async function refreshVisiblePages() {
-    cancelAllRenders();
     const gen = ++renderGen;
-    await new Promise(r => setTimeout(r, 0));
-    if (gen !== renderGen) return;
 
     const scrollTop = dom.viewerScroll.scrollTop;
     const scrollBottom = scrollTop + dom.viewerScroll.clientHeight;
@@ -130,6 +127,12 @@ async function refreshVisiblePages() {
     visible.sort((a, b) => a.dist - b.dist);
 
     if (visible.length === 0) return;
+
+    const visibleSet = new Set(visible.map(p => p.pn));
+    cancelNonVisibleRenders(visibleSet);
+
+    await new Promise(r => setTimeout(r, 0));
+    if (gen !== renderGen) return;
 
     // Pass 1: low-res all visible pages concurrently (fast)
     const lowResBatch = visible
@@ -153,7 +156,8 @@ async function refreshVisiblePages() {
 
 export async function renderPageNow(pageNum, forceScale = null) {
     const renderScale = forceScale || state.currentScale;
-    const dpr = window.devicePixelRatio || 1;
+    const dprCaps = { quality: 99, medium: 1.5, fast: 1.0 };
+    const dpr = Math.min(window.devicePixelRatio || 1, dprCaps[state.renderQuality] || 99);
     const effectiveScale = renderScale * dpr;
 
     if ((state.renderedScales[pageNum] || 0) >= renderScale) return;
@@ -268,6 +272,14 @@ export function isPageRendered(pageNum) {
 }
 
 export function cancelBgRender() {}
+
+export function setRenderQuality(q) {
+    state.renderQuality = q;
+    localStorage.setItem('pdf_render_quality', q);
+    const ranges = getViewportRange();
+    for (const pn of ranges.visible) state.renderedScales[pn] = 0;
+    refreshVisiblePages();
+}
 
 // ── zoom ──
 

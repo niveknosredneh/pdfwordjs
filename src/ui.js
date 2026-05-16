@@ -3,6 +3,7 @@ import * as dom from './dom.js';
 import { fn } from './cross.js';
 
 state.currentLayout = window.localStorage.getItem('pdf_layout') || 'cards';
+state.renderQuality = window.localStorage.getItem('pdf_render_quality') || 'medium';
 state.expandedTreeItems = new Set();
 state.smoothScrollEnabled = false;
 state.mobileSidebarOpen = false;
@@ -315,7 +316,7 @@ export function toggleTheme() {
         html.setAttribute('data-theme', 'light');
         localStorage.setItem('pdf_theme', 'light');
     }
-    const btn = document.querySelector('#settingsMenu button:first-child');
+    const btn = document.querySelector('#settingsMenu button[data-btn=theme]');
     if (btn) btn.textContent = html.getAttribute('data-theme') === 'light' ? 'Dark Mode' : 'Light Mode';
 }
 
@@ -339,14 +340,30 @@ export function toggleSettings(e) {
     menu.className = 'settings-menu';
     menu.style.cssText = 'display:flex;position:fixed;left:' + rect.left + 'px;top:' + (rect.bottom + 4) + 'px;flex-direction:column;gap:6px';
 
+    const btnStyle = 'padding:6px 8px;font-size:0.75rem;border:1px solid var(--grey-600);border-radius:4px;cursor:pointer;background:transparent;color:var(--grey-300)';
+
+    const kwBtn = document.createElement('button');
+    kwBtn.textContent = '\u2699 Manage Keywords';
+    kwBtn.style.cssText = btnStyle;
+    kwBtn.onclick = () => {
+        const m = document.getElementById('settingsMenu');
+        if (m) m.remove();
+        state.settingsOpen = false;
+        window.toggleKeywordManager();
+    };
+    menu.appendChild(kwBtn);
+
     const themeBtn = document.createElement('button');
     const html = document.documentElement;
     themeBtn.innerHTML = '&#9728; ' + (html.getAttribute('data-theme') === 'light' ? 'Dark Mode' : 'Light Mode');
+    themeBtn.style.cssText = btnStyle;
+    themeBtn.dataset.btn = 'theme';
     themeBtn.onclick = toggleTheme;
     menu.appendChild(themeBtn);
 
     const animateBtn = document.createElement('button');
     animateBtn.className = 'toggle-btn' + (state.smoothScrollEnabled ? ' on' : '');
+    animateBtn.style.cssText = btnStyle;
     animateBtn.onclick = function() {
         this.classList.toggle('on');
         toggleAnimate();
@@ -395,6 +412,43 @@ export function toggleSettings(e) {
 
     layoutSection.appendChild(layoutBtns);
     menu.appendChild(layoutSection);
+
+    const qualitySection = document.createElement('div');
+    qualitySection.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:4px;padding-top:8px;border-top:1px solid var(--grey-600)';
+
+    const qualityLabel = document.createElement('span');
+    qualityLabel.className = 'toggle-label';
+    qualityLabel.textContent = 'Render Quality:';
+    qualitySection.appendChild(qualityLabel);
+
+    const qualityBtns = document.createElement('div');
+    qualityBtns.style.cssText = 'display:flex;gap:4px';
+
+    const qOpts = [
+        { key: 'quality', label: 'Quality' },
+        { key: 'medium', label: 'Medium' },
+        { key: 'fast', label: 'Fast' },
+    ];
+    qOpts.forEach(({ key, label }) => {
+        const btn = document.createElement('button');
+        btn.textContent = label;
+        btn.style.cssText = 'flex:1;padding:6px 8px;font-size:0.75rem;border:1px solid var(--grey-600);border-radius:4px;cursor:pointer;'
+            + 'background:' + (state.renderQuality === key ? 'var(--green)' : 'transparent') + ';'
+            + 'color:' + (state.renderQuality === key ? 'white' : 'var(--grey-300)');
+        btn.onclick = () => {
+            state.settingsJustToggled = true;
+            fn.setRenderQuality(key);
+            qualityBtns.querySelectorAll('button').forEach(b => {
+                const isSelected = b.textContent === label;
+                b.style.background = isSelected ? 'var(--green)' : 'transparent';
+                b.style.color = isSelected ? 'white' : 'var(--grey-300)';
+            });
+        };
+        qualityBtns.appendChild(btn);
+    });
+
+    qualitySection.appendChild(qualityBtns);
+    menu.appendChild(qualitySection);
 
     const githubSection = document.createElement('div');
     githubSection.style.cssText = 'margin-top:4px;padding-top:8px;border-top:1px solid var(--grey-600);display:flex;justify-content:center';

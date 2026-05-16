@@ -629,6 +629,16 @@ body {
 }
 .pdf-page canvas { display: block; }
 
+.docx-wrapper {
+    margin: 0 auto; max-width: 100%;
+    width: calc(var(--docx-scale, 1.0) * 800px);
+}
+.docx-page {
+    margin: 16px auto; padding: 20px; box-sizing: border-box;
+    background: white; color: black; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    font-family: Times New Roman, serif; font-size: 12pt; line-height: 1.6;
+}
+
 .textLayer {
     position: absolute; top: 0; left: 0;
     width: 100%; height: 100%;
@@ -651,10 +661,10 @@ body {
 }
 
 .doc-highlight {
-    background: rgba(255, 208, 20, 0.4); border-radius: 2px; padding: 0 2px;
+    background: var(--highlight-color); border-radius: 2px; padding: 0 2px;
 }
 .doc-highlight.current {
-    background: rgba(255, 208, 20, 0.6); outline: 2px solid rgba(255, 208, 20, 0.8);
+    background: var(--highlight-current); outline: 2px solid rgba(255, 208, 20, 0.8);
 }
 
 .page-placeholder {

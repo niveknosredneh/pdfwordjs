@@ -7,6 +7,93 @@ state.searchCache = {};
 state.docSearchResults = [];
 state.docCurrentMatchIndex = -1;
 state.docOriginalHtml = null;
+state._docPageHtmls = null;
+state._docPageOffsets = null;
+
+// ── helpers ──
+
+function splitHtmlIntoPages(html, targetPerPage = 3000) {
+    // First, split at explicit <hr> page breaks (mammoth's page break markers)
+    const hrParts = html.split(/<hr\b[^>]*>/i).filter(Boolean);
+    if (hrParts.length > 1) {
+        const result = [];
+        for (const part of hrParts) {
+            // Each <hr>-delimited section may still be large — sub-split it
+            const sub = splitByBlockElements(part, targetPerPage);
+            result.push(...sub);
+        }
+        return result;
+    }
+
+    // No explicit breaks — split content into roughly equal pages
+    const result = splitByBlockElements(html, targetPerPage);
+    return result.length > 0 ? result : [html];
+}
+
+function splitByBlockElements(html, targetPerPage) {
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    const children = Array.from(temp.children);
+    if (children.length === 0) return [html];
+
+    const pages = [];
+    let currentPage = [];
+    let currentLen = 0;
+
+    for (const child of children) {
+        const textLen = (child.textContent || '').length;
+
+        // If this child alone exceeds target, it gets its own page
+        if (currentLen > 0 && currentLen + textLen > targetPerPage) {
+            pages.push(currentPage.map(el => el.outerHTML).join('\n'));
+            currentPage = [];
+            currentLen = 0;
+        }
+
+        currentPage.push(child);
+        currentLen += textLen;
+    }
+
+    if (currentPage.length > 0) {
+        pages.push(currentPage.map(el => el.outerHTML).join('\n'));
+    }
+
+    return pages;
+}
+
+function textFromHtml(html) {
+    const d = document.createElement('div');
+    d.innerHTML = html;
+    return d.textContent.replace(/\s+/g, ' ').trim();
+}
+
+function buildPageOffsets(pageTexts) {
+    const offsets = [];
+    let acc = 0;
+    for (const t of pageTexts) {
+        offsets.push(acc);
+        acc += t.length;
+    }
+    return offsets;
+}
+
+function findPageForIndex(charIndex, offsets) {
+    for (let i = offsets.length - 1; i >= 0; i--) {
+        if (charIndex >= offsets[i]) return i + 1;
+    }
+    return 1;
+}
+
+function styleTables(container) {
+    container.querySelectorAll('table').forEach(table => {
+        table.style.borderCollapse = 'collapse';
+        table.style.width = '100%';
+    });
+    container.querySelectorAll('td, th').forEach(cell => {
+        cell.style.border = '1px solid #000';
+        cell.style.padding = '4px';
+    });
+}
 
 export function loadDocxDoc(fileUrl, keyword = '') {
     if (state.currentDocUrl === fileUrl && state.docContentCache[fileUrl]) {
@@ -47,16 +134,15 @@ export function loadDocxDoc(fileUrl, keyword = '') {
             dom.loaderStatus.textContent = 'Rendering...';
 
             renderDocContent(cached.html, cached.text);
+            state.currentScale = 1.0;
+            document.documentElement.style.setProperty('--docx-scale', '1');
             dom.loaderProgressFill.style.width = '100%';
             dom.loader.style.display = 'none';
 
-            state.totalPages = 1;
-            state.currentPage = 1;
-
             fn.updatePageInfo();
             fn.updateZoomDisplay();
-            dom.pageInput.max = 1;
-            dom.pageTotal.textContent = '1';
+            dom.pageInput.max = state.totalPages;
+            dom.pageTotal.textContent = state.totalPages;
 
             startDocSearchComputation();
 
@@ -72,30 +158,39 @@ export function loadDocxDoc(fileUrl, keyword = '') {
 
 function renderDocContent(html, plainText) {
     dom.viewer.innerHTML = '';
-    state.textPageCache[1] = { text: plainText, viewport: { width: 800, height: 600 }, items: [] };
 
     if (!html) {
         dom.viewer.innerHTML = '<div style="padding:20px;">No content to display</div>';
+        state.totalPages = 1;
+        state.currentPage = 1;
         return;
     }
 
     state.docOriginalHtml = html;
+    const pageHtmls = splitHtmlIntoPages(html);
+    const pageTexts = pageHtmls.map(textFromHtml);
+    state._docPageHtmls = pageHtmls;
+    state._docPageOffsets = buildPageOffsets(pageTexts);
+    state.totalPages = pageHtmls.length;
+    state.currentPage = 1;
 
-    const container = document.createElement('div');
-    container.className = 'doc-viewer';
-    container.style.cssText = 'width:100%;max-width:800px;margin:0 auto;padding:20px;box-sizing:border-box;font-family:Times New Roman, serif;font-size:12pt;line-height:1.6;background:white;color:black;position:relative';
-    container.innerHTML = html;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'docx-wrapper';
+    wrapper.id = 'docxWrapper';
 
-    container.querySelectorAll('table').forEach(table => {
-        table.style.borderCollapse = 'collapse';
-        table.style.width = '100%';
+    pageHtmls.forEach((pageHtml, i) => {
+        const pn = i + 1;
+        const el = document.createElement('div');
+        el.className = 'docx-page';
+        el.id = 'page-' + pn;
+        el.innerHTML = pageHtml;
+        styleTables(el);
+        wrapper.appendChild(el);
+
+        state.textPageCache[pn] = { text: pageTexts[i], viewport: { width: 800, height: 600 }, items: [] };
     });
-    container.querySelectorAll('td, th').forEach(cell => {
-        cell.style.border = '1px solid #000';
-        cell.style.padding = '4px';
-    });
 
-    dom.viewer.appendChild(container);
+    dom.viewer.appendChild(wrapper);
 }
 
 function startDocSearchComputation() {
@@ -110,7 +205,8 @@ function startDocSearchComputation() {
     while ((match = combinedRegex.exec(text)) !== null) {
         if (match[0].length < 3) continue;
         if (!/[a-zA-Z]/.test(match[0])) continue;
-        results.push({ index: match.index, text: match[0], length: match[0].length });
+        const page = state._docPageOffsets ? findPageForIndex(match.index, state._docPageOffsets) : 1;
+        results.push({ index: match.index, text: match[0], length: match[0].length, page });
     }
 
     const counts = {};
@@ -136,7 +232,8 @@ export function performDocSearch(query) {
     let match;
 
     while ((match = localRegex.exec(text)) !== null) {
-        results.push({ index: match.index, text: match[0], length: match[0].length });
+        const page = state._docPageOffsets ? findPageForIndex(match.index, state._docPageOffsets) : 1;
+        results.push({ index: match.index, text: match[0], length: match[0].length, page });
     }
 
     state.docSearchResults = results;
@@ -170,7 +267,8 @@ export function cycleDocSearch(query) {
     let match;
 
     while ((match = localRegex.exec(text)) !== null) {
-        results.push({ index: match.index, text: match[0], length: match[0].length });
+        const page = state._docPageOffsets ? findPageForIndex(match.index, state._docPageOffsets) : 1;
+        results.push({ index: match.index, text: match[0], length: match[0].length, page });
     }
 
     if (results.length === 0) return;
@@ -191,41 +289,73 @@ export function cycleDocSearch(query) {
 }
 
 export function renderDocHighlights() {
-    const container = dom.viewer.querySelector('.doc-viewer');
-    if (!container || !state.docOriginalHtml) return;
+    const wrapper = dom.viewer.querySelector('.docx-wrapper');
+    if (!wrapper || !state._docPageHtmls) return;
 
-    container.innerHTML = state.docOriginalHtml;
+    const pageHtmls = state._docPageHtmls;
+
+    // Restore all pages to original HTML
+    const pages = wrapper.querySelectorAll('.docx-page');
+    pages.forEach((page, i) => {
+        if (i < pageHtmls.length) {
+            page.innerHTML = pageHtmls[i];
+            styleTables(page);
+        }
+    });
 
     if (!state.docSearchResults.length) return;
 
     const currentResult = state.docSearchResults[state.docCurrentMatchIndex];
     if (!currentResult) return;
 
-    const plainText = state.docContentCache[state.currentDocUrl]?.text || '';
-    const matchText = plainText.substring(currentResult.index, currentResult.index + currentResult.length);
-    const escapedMatch = matchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const searchRegex = new RegExp(escapedMatch, 'gi');
+    // Group results by page
+    const resultsByPage = {};
+    state.docSearchResults.forEach((r, idx) => {
+        const p = r.page || 1;
+        if (!resultsByPage[p]) resultsByPage[p] = [];
+        resultsByPage[p].push({ ...r, matchIndex: idx });
+    });
 
-    let matchCount = 0;
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, null);
-    const nodes = [];
-    let node;
-    while (node = walker.nextNode()) nodes.push(node);
+    // Apply highlights per page — search each page's own text independently
+    for (const pageNumStr in resultsByPage) {
+        const pageNum = parseInt(pageNumStr);
+        const pageEl = document.getElementById('page-' + pageNum);
+        if (!pageEl) continue;
 
-    for (const textNode of nodes) {
-        if (searchRegex.test(textNode.textContent)) {
-            searchRegex.lastIndex = 0;
-            const span = document.createElement('span');
-            span.innerHTML = textNode.textContent.replace(searchRegex, match => {
-                const isCurrent = (matchCount === state.docCurrentMatchIndex);
-                matchCount++;
-                return `<mark class="doc-highlight${isCurrent ? ' current' : ''}">${match}</mark>`;
-            });
-            textNode.parentNode.replaceChild(span, textNode);
+        const pageText = state.textPageCache[pageNum]?.text || '';
+        const pageResults = resultsByPage[pageNum];
+
+        // Build a single regex matching any of the result texts (word-bounded, matching search)
+        const uniqueTerms = [...new Set(pageResults.map(r => r.text))];
+        const combinedPattern = uniqueTerms.map(t => '\\b' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').join('|');
+        const combinedRegex = new RegExp(combinedPattern, 'gi');
+
+        // Walk text nodes
+        const walker = document.createTreeWalker(pageEl, NodeFilter.SHOW_TEXT, null, null);
+        const nodes = [];
+        let node;
+        while (node = walker.nextNode()) nodes.push(node);
+
+        let nodeAccum = 0;
+        for (const textNode of nodes) {
+            combinedRegex.lastIndex = 0;
+            const content = textNode.textContent;
+            if (combinedRegex.test(content)) {
+                combinedRegex.lastIndex = 0;
+                const span = document.createElement('span');
+                span.innerHTML = content.replace(combinedRegex, match => {
+                    const lower = match.toLowerCase();
+                    const matchingResult = pageResults.find(r => r.text.toLowerCase() === lower);
+                    const isCurrent = matchingResult && matchingResult.matchIndex === state.docCurrentMatchIndex;
+                    return `<mark class="doc-highlight${isCurrent ? ' current' : ''}">${match}</mark>`;
+                });
+                textNode.parentNode.replaceChild(span, textNode);
+            }
+            nodeAccum += content.length;
         }
     }
 
-    const currentMark = container.querySelector('.doc-highlight.current');
+    const currentMark = document.querySelector('.doc-highlight.current');
     if (currentMark) {
         currentMark.scrollIntoView({ behavior: state.smoothScrollEnabled ? 'smooth' : 'auto', block: 'center' });
     }
@@ -239,13 +369,11 @@ export function goToDocMatch(index) {
     fn.updateSidebarBadge();
 
     const result = state.docSearchResults[state.docCurrentMatchIndex];
-    const plainText = state.docContentCache[state.currentDocUrl]?.text || '';
-    const textLen = plainText.length;
-    const targetFraction = result.index / textLen;
-    const scrollHeight = dom.viewerScroll.scrollHeight - dom.viewerScroll.clientHeight;
-    const targetTop = scrollHeight * targetFraction;
-
-    dom.viewerScroll.scrollTo({ top: Math.max(0, targetTop), behavior: state.smoothScrollEnabled ? 'smooth' : 'auto' });
+    const pageNum = result.page || 1;
+    const pageEl = document.getElementById('page-' + pageNum);
+    if (pageEl) {
+        pageEl.scrollIntoView({ behavior: state.smoothScrollEnabled ? 'smooth' : 'auto', block: 'start' });
+    }
     renderDocHighlights();
 }
 

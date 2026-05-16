@@ -77,6 +77,8 @@ export function clearAllResults() {
     state.textPageCache = {};
     state.docSearchResults = [];
     state.docCurrentMatchIndex = -1;
+    state._docPageHtmls = null;
+    state._docPageOffsets = null;
 }
 
 function initSearchOverlay() {

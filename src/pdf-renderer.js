@@ -285,6 +285,14 @@ export function setZoom(newScale, force = false) {
     const clampedScale = Math.max(0.5, Math.min(4.0, newScale));
     if (clampedScale === state.currentScale && !force) return;
 
+    // DOCX zoom: scale wrapper width, text reflows naturally
+    if (state.currentDocType !== 'pdf') {
+        state.currentScale = clampedScale;
+        fn.updateZoomDisplay();
+        document.documentElement.style.setProperty('--docx-scale', clampedScale);
+        return;
+    }
+
     const viewportCenter = dom.viewerScroll.scrollTop + dom.viewerScroll.clientHeight / 2;
     const oldScrollLeft = dom.viewerScroll.scrollLeft;
 

@@ -2,6 +2,7 @@ import { state } from './state.js';
 import * as dom from './dom.js';
 import { fn } from './cross.js';
 import * as ocr from './ocr.js';
+import * as measure from './measure.js';
 
 state.currentLayout = window.localStorage.getItem('pdf_layout') || 'cards';
 state.renderQuality = window.localStorage.getItem('pdf_render_quality') || 'medium';
@@ -730,6 +731,15 @@ export function setupEventListeners() {
             dom.matchInput.blur();
             closeMobileSidebar();
             closeSearchOverlay();
+            if (measure.getActiveTool()) {
+                measure.deactivateTool();
+                updateMeasureUI();
+            }
+        }
+        if (e.key === 'Enter' && (measure.getActiveTool() === 'perimeter' || measure.getActiveTool() === 'area')) {
+            if (measure.getActiveTool() === 'perimeter') measure.finishPerimeter();
+            else measure.finishArea();
+            updateMeasureUI();
         }
     });
 
@@ -821,6 +831,46 @@ export function setupEventListeners() {
             if ((name === 'dragleave' && !dom.sidebar.contains(e.relatedTarget)) || name === 'drop') dom.sidebar.classList.remove('drag-over');
         }, false);
     });
+
+    const scaleInput = document.getElementById('scaleInput');
+    if (scaleInput) {
+        const updateScale = () => {
+            const numStr = scaleInput.value.replace(/.*:/, '').replace(/[^0-9.]/g, '');
+            const parsed = parseFloat(numStr);
+            if (!isNaN(parsed) && parsed >= 0.001) {
+                scaleInput.value = '1:' + parsed;
+                measure.setScale(parsed);
+                measure.renderAllMeasurements();
+            }
+        };
+        scaleInput.addEventListener('change', updateScale);
+        scaleInput.addEventListener('blur', updateScale);
+    }
+
+    dom.viewerScroll.addEventListener('click', (e) => {
+        measure.onPageClick(e);
+    });
+
+    dom.viewerScroll.addEventListener('dblclick', (e) => {
+        const tool = measure.getActiveTool();
+        if (tool === 'perimeter') {
+            measure.finishPerimeter();
+            updateMeasureUI();
+        } else if (tool === 'area') {
+            measure.finishArea();
+            updateMeasureUI();
+        }
+    });
+}
+
+export function updateMeasureUI() {
+    const distBtn = document.getElementById('measureDistBtn');
+    const perimBtn = document.getElementById('measurePerimBtn');
+    const areaBtn = document.getElementById('measureAreaBtn');
+    const active = measure.getActiveTool();
+    if (distBtn) distBtn.classList.toggle('active-tool', active === 'distance');
+    if (perimBtn) perimBtn.classList.toggle('active-tool', active === 'perimeter');
+    if (areaBtn) areaBtn.classList.toggle('active-tool', active === 'area');
 }
 
 window.addEventListener('beforeunload', () => {

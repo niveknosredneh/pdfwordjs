@@ -366,6 +366,7 @@ export function setZoom(newScale, force = false) {
     }
     if (state.searchResults.length > 0) fn.renderAllHighlights();
     fn.renderPageHeatmaps();
+    fn.refreshAllMeasurements();
 
     refreshVisiblePages();
 

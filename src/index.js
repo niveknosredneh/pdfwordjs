@@ -23,6 +23,7 @@ import * as rendering from './rendering.js';
 import * as ui from './ui.js';
 import * as keywords from './keywords.js';
 import * as ocr from './ocr.js';
+import * as measure from './measure.js';
 
 register('setupVirtualPages', pdfRenderer.setupVirtualPages);
 register('isPageRendered', pdfRenderer.isPageRendered);
@@ -81,6 +82,14 @@ register('toggleOcrForFile', ocr.toggleOcrForFile);
 register('isOcrEnabled', ocr.isOcrEnabled);
 register('getOcrState', ocr.getOcrState);
 register('getOcrMatchesForKeyword', ocr.getOcrMatchesForKeyword);
+
+register('setScale', measure.setScale);
+register('getActiveTool', measure.getActiveTool);
+register('activateTool', measure.activateTool);
+register('deactivateTool', measure.deactivateTool);
+register('clearMeasurements', measure.clearAllMeasurements);
+register('refreshAllMeasurements', measure.refreshAllMeasurements);
+register('renderAllMeasurements', measure.renderAllMeasurements);
 
 rendering.setCallbacks({
     loadDocument: pdfLoader.loadDocument,
@@ -249,6 +258,26 @@ dom.keywordListSelect.addEventListener('change', () => {
         if (state.objectUrls.length > 0) fileHandler.rescanAllDocuments();
     }
 });
+
+window.measureDistance = function() {
+    const tool = measure.getActiveTool();
+    if (tool === 'distance') { measure.deactivateTool(); }
+    else { measure.activateTool('distance'); }
+    ui.updateMeasureUI();
+};
+window.measurePerimeter = function() {
+    const tool = measure.getActiveTool();
+    if (tool === 'perimeter') { measure.deactivateTool(); }
+    else { measure.activateTool('perimeter'); }
+    ui.updateMeasureUI();
+};
+window.measureArea = function() {
+    const tool = measure.getActiveTool();
+    if (tool === 'area') { measure.deactivateTool(); }
+    else { measure.activateTool('area'); }
+    ui.updateMeasureUI();
+};
+window.clearMeasurements = function() { measure.clearAllMeasurements(); ui.updateMeasureUI(); };
 
 document.addEventListener('DOMContentLoaded', async () => {
     await keywords.loadKeywords();

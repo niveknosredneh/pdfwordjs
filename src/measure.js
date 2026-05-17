@@ -3,30 +3,83 @@ import * as dom from './dom.js';
 
 // ── state ──
 
-let activeTool = null;     // 'distance' | 'polyline' | 'area'
-let scaleX = 100;           // the X in "1:X"
-let measurementsByDoc = {}; // url -> Measurement[]
-let pendingPoints = [];    // points for the in-progress measurement
-let previewLine = null;    // {x1,y1,x2,y2} during mouse move
-let activePage = null;     // page number where the first point was placed
-let isListening = false;   // whether we've attached the mousemove handler
+/** @type {'distance'|'polyline'|'area'|null} */
+let activeTool = null;
+/** @type {number} the X in "1:X" */
+let scaleX = 100;
+/** @type {Object<string, Array<{id:string, type:string, points:Array, label:string, areaMm2?:number}>>} */
+let measurementsByDoc = {};
+/** @type {Array<{page:number, x:number, y:number}>} */
+let pendingPoints = [];
+/** @type {{x1:number, y1:number, x2:number, y2:number}|null} */
+let previewLine = null;
+/** @type {number|null} */
+let activePage = null;
+/** @type {boolean} */
+let isListening = false;
 
-// ── types ──
+const STORAGE_KEY = 'kwpdf_measurements';
+const SCALE_STORAGE_KEY = 'kwpdf_measure_scale';
+const MAX_SCALE = 10000000;
 
-// Measurement = { id, type:'distance'|'polyline'|'area', points:[{page,x,y}], label:'...' }
+// ── stable doc key (filenames persist across reloads, blob URLs don't) ──
+
+function getDocKey() {
+    const url = state.currentDocUrl;
+    if (!url) return null;
+    const entry = state.docDataCache[url];
+    return entry?.fullPath || url;
+}
+
+// ── persistence ──
+
+function loadMeasurements() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) measurementsByDoc = JSON.parse(raw);
+    } catch (e) { /* ignore */ }
+}
+
+function saveMeasurements() {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(measurementsByDoc));
+    } catch (e) { /* quota exceeded, ignore */ }
+}
+
+function loadScale() {
+    try {
+        const raw = localStorage.getItem(SCALE_STORAGE_KEY);
+        if (raw) {
+            const parsed = parseFloat(raw);
+            if (!isNaN(parsed) && parsed >= 0.001 && parsed <= MAX_SCALE) scaleX = parsed;
+        }
+    } catch (e) { /* ignore */ }
+}
+
+function saveScale() {
+    try {
+        localStorage.setItem(SCALE_STORAGE_KEY, String(scaleX));
+    } catch (e) { /* ignore */ }
+}
+
+loadMeasurements();
+loadScale();
 
 // ── helpers (PDF 1x space ↔ real-world) ──
 
 const POINTS_PER_MM = 72 / 25.4;
 
+/** @param {number} pdfPts */
 function pdfToMm(pdfPts) {
     return pdfPts / POINTS_PER_MM;
 }
 
+/** @param {number} pdfPts */
 function realWorldMm(pdfPts) {
     return pdfToMm(pdfPts) * scaleX;
 }
 
+/** @param {number} totalMm */
 function formatLength(totalMm) {
     if (totalMm < 0) totalMm = 0;
     if (totalMm < 10) return Math.round(totalMm) + ' mm';
@@ -34,6 +87,7 @@ function formatLength(totalMm) {
     return (totalMm / 1000).toFixed(2) + ' m';
 }
 
+/** @param {number} mm2 */
 function formatArea(mm2) {
     if (mm2 < 0) mm2 = 0;
     if (mm2 < 100) return Math.round(mm2) + ' mm\xB2';
@@ -41,6 +95,7 @@ function formatArea(mm2) {
     return (mm2 / 1000000).toFixed(2) + ' m\xB2';
 }
 
+/** @param {Array<{x:number, y:number}>} points */
 function polygonArea(points) {
     let sum = 0;
     for (let i = 0; i < points.length; i++) {
@@ -51,14 +106,26 @@ function polygonArea(points) {
     return Math.abs(sum) / 2;
 }
 
+/** @param {{x:number, y:number}} p1 @param {{x:number, y:number}} p2 */
 function distanceBetween(p1, p2) {
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
     return Math.sqrt(dx * dx + dy * dy);
 }
 
+/** @param {Array<{x:number, y:number}>} points @param {boolean} [closed] */
+function polylineLength(points, closed) {
+    let total = 0;
+    const n = closed ? points.length : points.length - 1;
+    for (let i = 0; i < n; i++) {
+        total += distanceBetween(points[i], points[(i + 1) % points.length]);
+    }
+    return total;
+}
+
 // ── page → PDF coordinate conversion ──
 
+/** @param {MouseEvent} e @returns {{page:number, x:number, y:number}|null} */
 function pageEventToPdfCoords(e) {
     let el = e.target;
     while (el && !el.id?.startsWith('page-')) el = el.parentElement;
@@ -74,10 +141,12 @@ function pageEventToPdfCoords(e) {
 
 // ── public API ──
 
+/** @param {number|string} value */
 export function setScale(value) {
     const parsed = parseFloat(value);
-    if (isNaN(parsed) || parsed < 0.001) return;
+    if (isNaN(parsed) || parsed < 0.001 || parsed > MAX_SCALE) return;
     scaleX = parsed;
+    saveScale();
 }
 
 export function getScale() {
@@ -88,6 +157,7 @@ export function getActiveTool() {
     return activeTool;
 }
 
+/** @param {'distance'|'polyline'|'area'} tool */
 export function activateTool(tool) {
     if (activeTool === tool) {
         deactivateTool();
@@ -124,18 +194,30 @@ export function cancelMeasurement() {
 }
 
 export function clearAllMeasurements() {
-    const url = state.currentDocUrl;
+    const url = getDocKey();
     if (!url) return;
     delete measurementsByDoc[url];
+    saveMeasurements();
     renderAllMeasurements();
 }
 
+/** @param {string} id */
+export function deleteMeasurement(id) {
+    const url = getDocKey();
+    if (!url || !measurementsByDoc[url]) return;
+    measurementsByDoc[url] = measurementsByDoc[url].filter(m => m.id !== id);
+    saveMeasurements();
+    renderAllMeasurements();
+}
+
+/** @param {string} url */
 export function getDocMeasurements(url) {
     return measurementsByDoc[url] || [];
 }
 
 // ── click handling ──
 
+/** @param {MouseEvent} e */
 export function onPageClick(e) {
     if (!activeTool) return;
     const coords = pageEventToPdfCoords(e);
@@ -150,6 +232,7 @@ export function onPageClick(e) {
     }
 }
 
+/** @param {{page:number, x:number, y:number}} coords */
 function handleDistanceClick(coords) {
     if (pendingPoints.length === 0) {
         pendingPoints.push(coords);
@@ -170,8 +253,12 @@ function handleDistanceClick(coords) {
     }
 }
 
+function generateId() {
+    return Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+}
+
 function finalizeDistance() {
-    const url = state.currentDocUrl;
+    const url = getDocKey();
     if (!url || pendingPoints.length < 2) return;
     if (!measurementsByDoc[url]) measurementsByDoc[url] = [];
 
@@ -182,7 +269,7 @@ function finalizeDistance() {
     const label = formatLength(realMm);
 
     measurementsByDoc[url].push({
-        id: Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        id: generateId(),
         type: 'distance',
         points: [p1, p2],
         label
@@ -191,11 +278,13 @@ function finalizeDistance() {
     pendingPoints = [];
     previewLine = null;
     activePage = null;
+    saveMeasurements();
     renderAllMeasurements();
 }
 
 // ── perimeter ──
 
+/** @param {{page:number, x:number, y:number}} coords */
 function handlePerimeterClick(coords) {
     if (pendingPoints.length === 0) {
         pendingPoints.push(coords);
@@ -209,7 +298,7 @@ function handlePerimeterClick(coords) {
 }
 
 function finalizePerimeter() {
-    const url = state.currentDocUrl;
+    const url = getDocKey();
     if (!url || pendingPoints.length < 2) return;
     if (!measurementsByDoc[url]) measurementsByDoc[url] = [];
 
@@ -221,7 +310,7 @@ function finalizePerimeter() {
     const label = formatLength(realMm);
 
     measurementsByDoc[url].push({
-        id: Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        id: generateId(),
         type: 'polyline',
         points: pendingPoints.slice(),
         label
@@ -230,6 +319,7 @@ function finalizePerimeter() {
     pendingPoints = [];
     previewLine = null;
     activePage = null;
+    saveMeasurements();
     renderAllMeasurements();
 }
 
@@ -242,18 +332,16 @@ export function finishPerimeter() {
 // ── area ──
 
 function finalizeArea() {
-    const url = state.currentDocUrl;
+    const url = getDocKey();
     if (!url || pendingPoints.length < 3) return;
     if (!measurementsByDoc[url]) measurementsByDoc[url] = [];
 
     const pdfArea = polygonArea(pendingPoints);
-    const pdfPerimeter = polylineLength(pendingPoints);
     const realMm2 = pdfArea / (POINTS_PER_MM * POINTS_PER_MM) * scaleX * scaleX;
-    const realPerimMm = polylineLength(pendingPoints, true) * scaleX / POINTS_PER_MM;
     const label = formatArea(realMm2);
 
     measurementsByDoc[url].push({
-        id: Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        id: generateId(),
         type: 'area',
         points: pendingPoints.slice(),
         label,
@@ -263,16 +351,8 @@ function finalizeArea() {
     pendingPoints = [];
     previewLine = null;
     activePage = null;
+    saveMeasurements();
     renderAllMeasurements();
-}
-
-function polylineLength(points, closed) {
-    let total = 0;
-    const n = closed ? points.length : points.length - 1;
-    for (let i = 0; i < n; i++) {
-        total += distanceBetween(points[i], points[(i + 1) % points.length]);
-    }
-    return total;
 }
 
 export function finishArea() {
@@ -283,6 +363,7 @@ export function finishArea() {
 
 // ── mouse move preview ──
 
+/** @param {MouseEvent} e */
 function onMouseMove(e) {
     if (!activeTool || pendingPoints.length === 0) return;
     const coords = pageEventToPdfCoords(e);
@@ -313,7 +394,7 @@ function clearMeasurementOverlays() {
 export function renderAllMeasurements() {
     clearMeasurementOverlays();
 
-    const url = state.currentDocUrl;
+    const url = getDocKey();
     const docs = measurementsByDoc[url] || [];
 
     for (const m of docs) {
@@ -333,21 +414,60 @@ export function renderAllMeasurements() {
     }
 }
 
+/** @param {number} pageNum */
 function getPageEl(pageNum) {
     return document.getElementById('page-' + pageNum);
 }
 
+/** @param {{id:string, type:string, points:Array, label:string, areaMm2?:number}} m */
 function renderMeasurement(m) {
     if (m.type === 'distance') {
-        renderDistance(m.points[0], m.points[1], m.label, false);
+        renderDistance(m.points[0], m.points[1], m.label, false, m.id);
     } else if (m.type === 'polyline') {
-        renderPerimeter(m.points, m.label, false);
+        renderPerimeter(m.points, m.label, false, m.id);
     } else if (m.type === 'area') {
-        renderArea(m.points, m.label, false);
+        renderArea(m.points, m.label, false, m.id);
     }
 }
 
-function renderDistance(p1, p2, label, isPreview) {
+// ── label helper ──
+
+/** @param {number} x @param {number} y @param {string} color @param {string} text @param {string} [measId] */
+function createLabel(x, y, color, text, measId) {
+    const lbl = document.createElement('div');
+    lbl.className = 'measure-label';
+    lbl.style.left = (x + 6) + 'px';
+    lbl.style.top = (y - 10) + 'px';
+    lbl.style.color = color;
+    lbl.style.borderColor = color;
+    if (measId) {
+        lbl.textContent = text + '  \u00D7';
+        lbl.title = 'Click to delete';
+        lbl.style.cursor = 'pointer';
+        lbl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteMeasurement(measId);
+        });
+    } else {
+        lbl.textContent = text;
+    }
+    return lbl;
+}
+
+/** @param {number} x @param {number} y @param {number} tickLen @param {number} tickW @param {number} deg @param {string} color @param {string} className */
+function createTick(x, y, tickLen, tickW, deg, color, className) {
+    const tick = document.createElement('div');
+    tick.className = className;
+    tick.style.left = (x - tickLen / 2) + 'px';
+    tick.style.top = (y - tickW / 2) + 'px';
+    tick.style.width = tickLen + 'px';
+    tick.style.height = tickW + 'px';
+    tick.style.background = color;
+    tick.style.transform = 'rotate(' + deg + 'deg)';
+    return tick;
+}
+
+function renderDistance(p1, p2, label, isPreview, measId) {
     const pageEl = getPageEl(p1.page);
     if (!pageEl) return;
     const s = state.currentScale || 1;
@@ -356,7 +476,6 @@ function renderDistance(p1, p2, label, isPreview) {
 
     const layer = getOrCreateLayer(pageEl);
 
-    // line
     const dx = (p2.x - p1.x) * s;
     const dy = (p2.y - p1.y) * s;
     const len = Math.sqrt(dx * dx + dy * dy);
@@ -364,42 +483,33 @@ function renderDistance(p1, p2, label, isPreview) {
     const angle = Math.atan2(dy, dx) * 180 / Math.PI;
 
     const line = document.createElement('div');
-    line.className = 'measure-line';
-    line.style.cssText = 'position:absolute;left:' + (p1.x * s) + 'px;top:' + (p1.y * s) + 'px;' +
-        'width:' + len + 'px;height:' + lineW + 'px;' +
-        'background:' + color + ';transform-origin:0 50%;transform:rotate(' + angle + 'deg);' +
-        'pointer-events:none;z-index:5;';
+    line.className = 'measure-line m-line';
+    line.style.left = (p1.x * s) + 'px';
+    line.style.top = (p1.y * s) + 'px';
+    line.style.width = len + 'px';
+    line.style.transform = 'rotate(' + angle + 'deg)';
+    line.dataset.lineW = lineW;
+    line.dataset.color = color;
     if (!isPreview) {
-        line.style.borderTop = lineW + 'px solid ' + color;
-        line.style.height = '0';
-        line.style.background = 'none';
+        line.classList.add('m-line-final');
+        line.style.borderTopColor = color;
     }
     layer.appendChild(line);
 
-    // tick marks at endpoints (perpendicular to line)
+    const tickLen = isPreview ? 8 : 10;
+    const tickW = 2;
+    const tickAngle = angle + 90;
     for (const p of [p1, p2]) {
-        const tick = document.createElement('div');
-        tick.className = 'measure-tick';
-        const tickLen = isPreview ? 8 : 10;
-        const tickW = 2;
-        tick.style.cssText = 'position:absolute;left:' + ((p.x * s) - tickLen/2) + 'px;top:' + ((p.y * s) - tickW/2) + 'px;' +
-            'width:' + tickLen + 'px;height:' + tickW + 'px;' +
-            'background:' + color + ';transform-origin:50% 50%;transform:rotate(' + (angle + 90) + 'deg);' +
-            'pointer-events:none;z-index:6;';
+        const tx = p.x * s;
+        const ty = p.y * s;
+        const tick = createTick(tx, ty, tickLen, tickW, tickAngle, color, 'measure-tick');
         layer.appendChild(tick);
     }
 
-    // label
     if (label) {
         const midX = ((p1.x + p2.x) / 2) * s;
         const midY = ((p1.y + p2.y) / 2) * s;
-        const lbl = document.createElement('div');
-        lbl.className = 'measure-label';
-        lbl.style.cssText = 'position:absolute;left:' + (midX + 6) + 'px;top:' + (midY - 10) + 'px;' +
-            'font-size:11px;color:' + color + ';background:var(--toolbar-bg);padding:1px 5px;' +
-            'border-radius:3px;pointer-events:none;z-index:7;white-space:nowrap;' +
-            'font-family:sans-serif;border:1px solid ' + color + ';';
-        lbl.textContent = label;
+        const lbl = createLabel(midX, midY, color, label, measId);
         layer.appendChild(lbl);
     }
 }
@@ -410,17 +520,14 @@ function renderPendingPoint() {
     if (!pageEl) return;
     const s = state.currentScale || 1;
     const layer = getOrCreateLayer(pageEl);
-    const tickLen = 10, tickW = 2;
-    const tick = document.createElement('div');
-    tick.className = 'measure-tick-pending';
-    tick.style.cssText = 'position:absolute;left:' + ((p.x * s) - tickLen/2) + 'px;top:' + ((p.y * s) - tickW/2) + 'px;' +
-        'width:' + tickLen + 'px;height:' + tickW + 'px;' +
-        'background:var(--green);transform-origin:50% 50%;' +
-        'pointer-events:none;z-index:6;box-shadow:0 0 0 1px rgba(255,255,255,0.6);';
+    const tx = p.x * s;
+    const ty = p.y * s;
+    const tick = createTick(tx, ty, 10, 2, 0, 'var(--green)', 'measure-tick-pending');
+    tick.style.boxShadow = '0 0 0 1px rgba(255,255,255,0.6)';
     layer.appendChild(tick);
 }
 
-function renderPerimeter(points, label, isPreview) {
+function renderPerimeter(points, label, isPreview, measId) {
     if (points.length < 2) return;
     const pageEl = getPageEl(points[0].page);
     if (!pageEl) return;
@@ -429,29 +536,13 @@ function renderPerimeter(points, label, isPreview) {
     const lineW = isPreview ? 1 : 2;
     const layer = getOrCreateLayer(pageEl);
 
-    // draw each segment
     for (let i = 0; i < points.length - 1; i++) {
         const p1 = points[i], p2 = points[i + 1];
-        const dx = (p2.x - p1.x) * s;
-        const dy = (p2.y - p1.y) * s;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len < 0.5) continue;
-        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-        const line = document.createElement('div');
-        line.className = 'measure-line';
-        line.style.cssText = 'position:absolute;left:' + (p1.x * s) + 'px;top:' + (p1.y * s) + 'px;' +
-            'width:' + len + 'px;height:' + lineW + 'px;' +
-            'background:' + color + ';transform-origin:0 50%;transform:rotate(' + angle + 'deg);' +
-            'pointer-events:none;z-index:5;';
-        if (!isPreview) {
-            line.style.borderTop = lineW + 'px solid ' + color;
-            line.style.height = '0';
-            line.style.background = 'none';
-        }
-        layer.appendChild(line);
+        drawLineSegment(layer, p1, p2, s, color, lineW, !isPreview);
     }
 
-    // tick at each vertex (perpendicular to incoming segment)
+    const tickLen = isPreview ? 8 : 10;
+    const tickW = 2;
     for (let i = 0; i < points.length; i++) {
         const p = points[i];
         let deg = 0;
@@ -459,35 +550,21 @@ function renderPerimeter(points, label, isPreview) {
             const dx = (p.x - points[i - 1].x) * s;
             const dy = (p.y - points[i - 1].y) * s;
             deg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
-        } else if (i === 0 && points.length > 1) {
+        } else if (points.length > 1) {
             const dx = (points[i + 1].x - p.x) * s;
             const dy = (points[i + 1].y - p.y) * s;
             deg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
         }
-        const tickLen = isPreview ? 8 : 10;
-        const tickW = 2;
-        const tick = document.createElement('div');
-        tick.className = 'measure-tick';
-        tick.style.cssText = 'position:absolute;left:' + ((p.x * s) - tickLen/2) + 'px;top:' + ((p.y * s) - tickW/2) + 'px;' +
-            'width:' + tickLen + 'px;height:' + tickW + 'px;' +
-            'background:' + color + ';transform-origin:50% 50%;transform:rotate(' + deg + 'deg);' +
-            'pointer-events:none;z-index:6;';
+        const tx = p.x * s;
+        const ty = p.y * s;
+        const tick = createTick(tx, ty, tickLen, tickW, deg, color, 'measure-tick');
         layer.appendChild(tick);
     }
 
-    // total label at centroid
     if (label) {
         const cx = points.reduce((sum, p) => sum + p.x, 0) / points.length;
         const cy = points.reduce((sum, p) => sum + p.y, 0) / points.length;
-        const midX = cx * s;
-        const midY = cy * s;
-        const lbl = document.createElement('div');
-        lbl.className = 'measure-label';
-        lbl.style.cssText = 'position:absolute;left:' + (midX + 6) + 'px;top:' + (midY - 10) + 'px;' +
-            'font-size:11px;color:' + color + ';background:var(--toolbar-bg);padding:1px 5px;' +
-            'border-radius:3px;pointer-events:none;z-index:7;white-space:nowrap;' +
-            'font-family:sans-serif;border:1px solid ' + color + ';';
-        lbl.textContent = label;
+        const lbl = createLabel(cx * s, cy * s, color, label, measId);
         layer.appendChild(lbl);
     }
 }
@@ -500,47 +577,61 @@ function renderPendingPerimeter() {
     const s = state.currentScale || 1;
     const layer = getOrCreateLayer(pageEl);
     const color = 'var(--green)';
-    const lineW = 1;
 
-    // segments between consecutive points
     for (let i = 0; i < points.length - 1; i++) {
-        const p1 = points[i], p2 = points[i + 1];
-        const dx = (p2.x - p1.x) * s;
-        const dy = (p2.y - p1.y) * s;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len < 0.5) continue;
-        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-        const line = document.createElement('div');
-        line.className = 'measure-line';
-        line.style.cssText = 'position:absolute;left:' + (p1.x * s) + 'px;top:' + (p1.y * s) + 'px;' +
-            'width:' + len + 'px;height:' + lineW + 'px;' +
-            'background:' + color + ';transform-origin:0 50%;transform:rotate(' + angle + 'deg);' +
-            'pointer-events:none;z-index:5;' +
-            'border-top:' + lineW + 'px solid ' + color + ';height:0;background:none;';
-        layer.appendChild(line);
+        drawLineSegment(layer, points[i], points[i + 1], s, color, 1, true);
     }
 
-    // tick at each vertex
     const tickLen = 8, tickW = 2;
     for (let i = 0; i < points.length; i++) {
         const p = points[i];
-        let angle = 0;
+        let deg = 0;
         if (i < points.length - 1) {
             const dx = (points[i + 1].x - p.x) * s;
             const dy = (points[i + 1].y - p.y) * s;
-            angle = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+            deg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
         }
-        const tick = document.createElement('div');
-        tick.className = 'measure-tick-pending';
-        tick.style.cssText = 'position:absolute;left:' + ((p.x * s) - tickLen/2) + 'px;top:' + ((p.y * s) - tickW/2) + 'px;' +
-            'width:' + tickLen + 'px;height:' + tickW + 'px;' +
-            'background:' + color + ';transform-origin:50% 50%;transform:rotate(' + angle + 'deg);' +
-            'pointer-events:none;z-index:6;';
+        const tx = p.x * s;
+        const ty = p.y * s;
+        const tick = createTick(tx, ty, tickLen, tickW, deg, color, 'measure-tick-pending');
         layer.appendChild(tick);
+    }
+
+    // running length label for perimeter/area
+    const totalPdf = polylineLength(points, false);
+    if (activeTool === 'perimeter') {
+        const realMm = realWorldMm(totalPdf);
+        const lblText = formatLength(realMm);
+        const last = points[points.length - 1];
+        const lbl = createLabel(last.x * s + 10, last.y * s - 10, 'var(--green)', lblText);
+        layer.appendChild(lbl);
     }
 }
 
-function renderArea(points, label, isPreview) {
+/** @param {HTMLElement} layer @param {{x:number, y:number}} p1 @param {{x:number, y:number}} p2 @param {number} s @param {string} color @param {number} lineW @param {boolean} finalStyle */
+function drawLineSegment(layer, p1, p2, s, color, lineW, finalStyle) {
+    const dx = (p2.x - p1.x) * s;
+    const dy = (p2.y - p1.y) * s;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 0.5) return;
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+    const line = document.createElement('div');
+    line.className = 'measure-line m-line';
+    line.style.left = (p1.x * s) + 'px';
+    line.style.top = (p1.y * s) + 'px';
+    line.style.width = len + 'px';
+    line.style.transform = 'rotate(' + angle + 'deg)';
+    line.dataset.lineW = lineW;
+    line.dataset.color = color;
+    if (finalStyle) {
+        line.classList.add('m-line-final');
+        line.style.borderTopColor = color;
+    }
+    layer.appendChild(line);
+}
+
+function renderArea(points, label, isPreview, measId) {
     if (points.length < 3) return;
     const pageEl = getPageEl(points[0].page);
     if (!pageEl) return;
@@ -549,68 +640,37 @@ function renderArea(points, label, isPreview) {
     const lineW = isPreview ? 1 : 2;
     const layer = getOrCreateLayer(pageEl);
 
-    // draw all segments (closed polygon)
     for (let i = 0; i < points.length; i++) {
         const p1 = points[i], p2 = points[(i + 1) % points.length];
-        const dx = (p2.x - p1.x) * s;
-        const dy = (p2.y - p1.y) * s;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len < 0.5) continue;
-        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-        const line = document.createElement('div');
-        line.className = 'measure-line';
-        line.style.cssText = 'position:absolute;left:' + (p1.x * s) + 'px;top:' + (p1.y * s) + 'px;' +
-            'width:' + len + 'px;height:' + lineW + 'px;' +
-            'background:' + color + ';transform-origin:0 50%;transform:rotate(' + angle + 'deg);' +
-            'pointer-events:none;z-index:5;';
-        if (!isPreview) {
-            line.style.borderTop = lineW + 'px solid ' + color;
-            line.style.height = '0';
-            line.style.background = 'none';
-        }
-        layer.appendChild(line);
+        drawLineSegment(layer, p1, p2, s, color, lineW, !isPreview);
     }
 
-    // tick at each vertex (perpendicular to incoming segment)
+    const tickLen = isPreview ? 8 : 10;
+    const tickW = 2;
     for (let i = 0; i < points.length; i++) {
         const p = points[i];
         const prev = points[(i - 1 + points.length) % points.length];
         const dx = (p.x - prev.x) * s;
         const dy = (p.y - prev.y) * s;
         const deg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
-        const tickLen = isPreview ? 8 : 10;
-        const tickW = 2;
-        const tick = document.createElement('div');
-        tick.className = 'measure-tick';
-        tick.style.cssText = 'position:absolute;left:' + ((p.x * s) - tickLen/2) + 'px;top:' + ((p.y * s) - tickW/2) + 'px;' +
-            'width:' + tickLen + 'px;height:' + tickW + 'px;' +
-            'background:' + color + ';transform-origin:50% 50%;transform:rotate(' + deg + 'deg);' +
-            'pointer-events:none;z-index:6;';
+        const tx = p.x * s;
+        const ty = p.y * s;
+        const tick = createTick(tx, ty, tickLen, tickW, deg, color, 'measure-tick');
         layer.appendChild(tick);
     }
 
-    // fill with semi-transparent color
+    // fill
     const fill = document.createElement('div');
-    fill.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;' +
-        'background:' + color + '10;pointer-events:none;z-index:3;';
-    fill.id = 'area-fill-' + Date.now();
+    fill.className = 'measure-fill';
     const clip = points.map(p => (p.x * s) + 'px ' + (p.y * s) + 'px').join(', ');
     fill.style.clipPath = 'polygon(' + clip + ')';
+    fill.style.background = color + '18';
     layer.appendChild(fill);
 
-    // area label at centroid
     if (label) {
         const cx = points.reduce((sum, p) => sum + p.x, 0) / points.length;
         const cy = points.reduce((sum, p) => sum + p.y, 0) / points.length;
-        const midX = cx * s;
-        const midY = cy * s;
-        const lbl = document.createElement('div');
-        lbl.className = 'measure-label';
-        lbl.style.cssText = 'position:absolute;left:' + (midX + 6) + 'px;top:' + (midY - 10) + 'px;' +
-            'font-size:11px;color:' + color + ';background:var(--toolbar-bg);padding:1px 5px;' +
-            'border-radius:3px;pointer-events:none;z-index:7;white-space:nowrap;' +
-            'font-family:sans-serif;border:1px solid ' + color + ';';
-        lbl.textContent = label;
+        const lbl = createLabel(cx * s, cy * s, color, label, measId);
         layer.appendChild(lbl);
     }
 }
@@ -625,12 +685,12 @@ function renderPreviewLine() {
     renderDistance(p1, p2, label, true);
 }
 
+/** @param {HTMLElement} pageEl @returns {HTMLElement} */
 function getOrCreateLayer(pageEl) {
     let layer = pageEl.querySelector('.measure-layer');
     if (!layer) {
         layer = document.createElement('div');
         layer.className = 'measure-layer';
-        layer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;pointer-events:none;z-index:4;';
         pageEl.appendChild(layer);
     }
     return layer;

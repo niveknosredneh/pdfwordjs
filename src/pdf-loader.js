@@ -129,6 +129,7 @@ function loadPDF(fileUrl, keyword = '') {
             dom.pageTotal.textContent = state.totalPages;
 
             fn.renderPageHeatmaps();
+            fn.refreshAllMeasurements();
 
             if (state.currentLayout === 'tree') fn.renderResultsArea();
 

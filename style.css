@@ -23,6 +23,13 @@
     --pdf-scale: 1.0;
 }
 
+html.transitioning,
+html.transitioning *,
+html.transitioning *::before,
+html.transitioning *::after {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease !important;
+}
+
 [data-theme="light"] {
     --green: #737373;
     --green-light: #a3a3a3;
@@ -448,6 +455,51 @@ body {
 .doc-card-minimal:hover {
     opacity: 1;
 }
+.ocr-toggle {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 3px;
+    border: 1px solid var(--grey-600);
+    background: transparent;
+    color: var(--grey-400);
+    cursor: pointer;
+    margin-left: 6px;
+    vertical-align: middle;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+.ocr-toggle:hover {
+    background: var(--green-bg);
+    color: var(--green-light);
+    border-color: var(--green);
+}
+.ocr-toggle.active {
+    background: rgba(163, 163, 163, 0.2);
+    color: var(--green-light);
+    border-color: var(--green);
+}
+.ocr-toggle-tree {
+    font-size: 0.65rem;
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--grey-600);
+    background: transparent;
+    color: var(--grey-500);
+    cursor: pointer;
+    margin-left: auto;
+    flex-shrink: 0;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+.ocr-toggle-tree:hover {
+    background: var(--green-bg);
+    color: var(--green-light);
+    border-color: var(--green);
+}
+.ocr-toggle-tree.active {
+    background: rgba(163, 163, 163, 0.2);
+    color: var(--green-light);
+    border-color: var(--green);
+}
+
 .doc-name { font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; color: var(--grey-300); word-break: break-word; line-height: 1.4; }
 .doc-card-minimal .doc-name { margin-bottom: 0; font-size: 0.75rem; color: var(--grey-500); }
 

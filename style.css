@@ -555,6 +555,17 @@ body {
 .viewer-toolbar .nav-group.active { display: flex; }
 .viewer-toolbar .match-counter { font-size: 0.8rem; color: var(--green); font-weight: 600; font-family: monospace; min-width: 60px; text-align: center; }
 
+.toolbar-measure { gap: 1px; }
+.toolbar-measure .scale-input {
+    width: 78px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+    color: white; text-align: center; padding: 4px 3px; border-radius: 4px; font-size: 0.85rem;
+    font-family: monospace;
+}
+.toolbar-measure .scale-input:focus { outline: none; border-color: var(--green); background: rgba(255,255,255,0.12); }
+.toolbar-measure button.active-tool { background: var(--green); color: white; }
+
+.measure-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; pointer-events: none; z-index: 4; }
+
 .page-input, .match-input {
     width: 70px;
     background: rgba(255,255,255,0.08);

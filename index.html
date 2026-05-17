@@ -81,6 +81,13 @@
             <button onclick="findNext()" title="Next match">&#8594;</button>
             <button class="nav-clear" onclick="clearSearch()" title="Clear search">&#10005;</button>
         </div>
+        <div class="toolbar-section toolbar-measure" id="measureSection">
+            <input type="text" class="scale-input small" id="scaleInput" value="1:100" placeholder="1:XXX" title="Scale 1:X">
+            <button onclick="measureDistance()" id="measureDistBtn" title="Measure distance">&#8597;</button>
+            <button onclick="measurePerimeter()" id="measurePerimBtn" title="Polyline (click points, dbl-click/Enter to finish)">&#8629;</button>
+            <button onclick="measureArea()" id="measureAreaBtn" title="Area (click points, dbl-click/Enter to close)">&#9633;</button>
+            <button onclick="clearMeasurements()" id="clearMeasureBtn" title="Clear all measurements">&#10005;</button>
+        </div>
     </div>
 
     <div class="viewer-scroll" id="viewerScroll">

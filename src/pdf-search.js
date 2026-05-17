@@ -145,6 +145,27 @@ export async function fetchPageItems(pageNum) {
     }
 }
 
+function appendOcrResults(keyword) {
+    const getter = fn.getOcrMatchesForKeyword;
+    if (!getter) return;
+    const matches = getter(keyword, state.currentDocUrl);
+    if (!matches || matches.length === 0) return;
+    for (const m of matches) {
+        const hasCoords = m.x !== undefined;
+        const dup = state.searchResults.some(r =>
+            r.page === m.page && (hasCoords
+                ? Math.abs(r.x - m.x) < 1 && Math.abs(r.y - m.y) < 1
+                : r.ocr)
+        );
+        if (dup) continue;
+        if (hasCoords) {
+            state.searchResults.push({ page: m.page, x: m.x, y: m.y, width: m.width, height: m.height, ocr: true });
+        } else {
+            state.searchResults.push({ page: m.page, x: null, y: null, width: null, height: null, ocr: true });
+        }
+    }
+}
+
 export async function performSearch(query) {
     if (!state.pdfDoc || !query) return;
 
@@ -157,6 +178,7 @@ export async function performSearch(query) {
 
     if (state.searchCache[canonicalQuery] !== undefined) {
         state.searchResults = state.searchCache[canonicalQuery];
+        appendOcrResults(canonicalQuery);
         buildSearchResultsByPage();
         state.activeKeyword = canonicalQuery;
         state.currentMatchIndex = 0;
@@ -171,6 +193,7 @@ export async function performSearch(query) {
 
     await computeSearchForQuery(canonicalQuery);
     state.searchResults = state.searchCache[canonicalQuery] || [];
+    appendOcrResults(canonicalQuery);
     buildSearchResultsByPage();
 
     showSearchResults();
@@ -207,6 +230,7 @@ export function cycleSearch(query) {
 
     if (state.searchCache[query] !== undefined) {
         state.searchResults = state.searchCache[query];
+        appendOcrResults(query);
         buildSearchResultsByPage();
         state.activeKeyword = query;
 
@@ -242,6 +266,7 @@ export function renderAllHighlights() {
         if (!pageEl) continue;
         const fragment = document.createDocumentFragment();
         state.searchResultsByPage[pageNum].forEach(({ result, globalIndex }) => {
+            if (result.x === null) return;
             const mark = document.createElement('div');
             mark.className = 'highlight-mark' + (globalIndex === state.currentMatchIndex ? ' current' : '');
             mark.style.left = (result.x * state.currentScale) + 'px';
@@ -264,6 +289,7 @@ export function renderHighlightsForPage(pageNum) {
 
     const fragment = document.createDocumentFragment();
     results.forEach(({ result, globalIndex }) => {
+        if (result.x === null) return;
         const mark = document.createElement('div');
         mark.className = 'highlight-mark' + (globalIndex === state.currentMatchIndex ? ' current' : '');
         mark.style.left = (result.x * state.currentScale) + 'px';

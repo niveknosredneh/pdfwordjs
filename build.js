@@ -31,7 +31,7 @@ const bundleHash = crypto.createHash('md5')
     .slice(0, 8);
 
 let bundle = fs.readFileSync(path.join(dist, 'bundle.js'), 'utf8');
-bundle = bundle.replace('__BUNDLE_HASH__', bundleHash).replace('__COMMIT_DATE__', commitDate);
+bundle = bundle.replaceAll('__BUNDLE_HASH__', bundleHash).replaceAll('__COMMIT_DATE__', commitDate);
 fs.writeFileSync(path.join(dist, 'bundle.js'), bundle);
 
 function copy(src, dest) { fs.cpSync(path.join(__dirname, src), path.join(dist, dest), { recursive: true }); }
@@ -51,5 +51,6 @@ fs.writeFileSync(path.join(dist, 'service_worker.js'), sw);
 
 copy('node_modules/pdfjs-dist/build/pdf.worker.min.js', 'pdf.worker.min.js');
 copy('src/doc_processor_worker.js', 'utils/doc_processor_worker.js');
+copy('src/ocr_worker.js', 'utils/ocr_worker.js');
 
 console.log('Build complete: dist/bundle.js + dist/pdf.worker.min.js [cache:' + bundleHash + ']');

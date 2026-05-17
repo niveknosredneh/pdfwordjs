@@ -22,6 +22,7 @@ import * as fileHandler from './file-handler.js';
 import * as rendering from './rendering.js';
 import * as ui from './ui.js';
 import * as keywords from './keywords.js';
+import * as ocr from './ocr.js';
 
 register('setupVirtualPages', pdfRenderer.setupVirtualPages);
 register('isPageRendered', pdfRenderer.isPageRendered);
@@ -74,6 +75,12 @@ register('toggleSettings', ui.toggleSettings);
 register('clearAllResults', ui.clearAllResults);
 
 register('populateKeywordSelect', keywords.populateKeywordSelect);
+
+register('toggleOcrGlobal', ocr.toggleOcrGlobal);
+register('toggleOcrForFile', ocr.toggleOcrForFile);
+register('isOcrEnabled', ocr.isOcrEnabled);
+register('getOcrState', ocr.getOcrState);
+register('getOcrMatchesForKeyword', ocr.getOcrMatchesForKeyword);
 
 rendering.setCallbacks({
     loadDocument: pdfLoader.loadDocument,
@@ -229,6 +236,8 @@ window.saveCurrentList = function() {
     keywords.switchKeywordList(listName);
     keywords.toggleKeywordManager();
 };
+
+ocr.initOcr();
 
 keywords.initKeywordBridge();
 

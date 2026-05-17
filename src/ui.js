@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import * as dom from './dom.js';
 import { fn } from './cross.js';
+import * as ocr from './ocr.js';
 
 state.currentLayout = window.localStorage.getItem('pdf_layout') || 'cards';
 state.renderQuality = window.localStorage.getItem('pdf_render_quality') || 'medium';
@@ -385,6 +386,25 @@ export function toggleSettings(e) {
     animateBtn.appendChild(stateEl);
 
     menu.appendChild(animateBtn);
+
+    const ocrBtn = document.createElement('button');
+    ocrBtn.className = 'toggle-btn' + (ocr.isOcrEnabled() ? ' on' : '');
+    ocrBtn.style.cssText = btnStyle;
+    ocrBtn.onclick = function() {
+        this.classList.toggle('on');
+        ocr.toggleOcrGlobal();
+        const st = this.querySelector('.toggle-state');
+        if (st) st.textContent = ocr.isOcrEnabled() ? 'ON' : 'OFF';
+    };
+    const ocrLabel = document.createElement('span');
+    ocrLabel.className = 'toggle-label';
+    ocrLabel.textContent = 'Enable OCR ';
+    ocrBtn.appendChild(ocrLabel);
+    const ocrState = document.createElement('span');
+    ocrState.className = 'toggle-state';
+    ocrState.textContent = ocr.isOcrEnabled() ? 'ON' : 'OFF';
+    ocrBtn.appendChild(ocrState);
+    menu.appendChild(ocrBtn);
 
     const layoutSection = document.createElement('div');
     layoutSection.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:4px;padding-top:8px;border-top:1px solid var(--grey-600)';

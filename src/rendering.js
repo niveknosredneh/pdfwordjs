@@ -1,5 +1,6 @@
 import { state } from './state.js';
 import * as dom from './dom.js';
+import { fn } from './cross.js';
 
 let _loadDocument, _cycleSearch, _cycleDocSearch, _closeMobileSidebar;
 
@@ -89,6 +90,15 @@ export function renderCard(fileName, counts, url, file) {
     const type = getFileType(fileName);
     state.docDataCache[url] = { name: baseName, folder, fullPath: fileName, counts, url, type };
 
+    if (existing?._ocrCounts) {
+        for (const [kw, c] of Object.entries(existing._ocrCounts)) {
+            counts[kw] = (counts[kw] || 0) + c;
+        }
+        state.docDataCache[url]._originalCounts = existing._originalCounts;
+        state.docDataCache[url]._ocrCounts = existing._ocrCounts;
+        state.docDataCache[url]._ocrTotalMatches = existing._ocrTotalMatches;
+    }
+
     if (state.currentLayout === 'tree') { renderResultsArea(); return; }
 
     let card = dom.resultsArea.querySelector(`.doc-card[data-url="${CSS.escape(url)}"]`);
@@ -104,6 +114,16 @@ export function renderCard(fileName, counts, url, file) {
     card.className = 'doc-card';
     card.dataset.type = type;
     card.innerHTML = `<div class="doc-name">${getFileIcon(fileName)} ${fileName}</div>`;
+
+    if (fn.isOcrEnabled()) {
+        const ocrState = fn.getOcrState(url);
+        const ocrBtn = document.createElement('button');
+        ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : '');
+        ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR \u2713' : 'OCR';
+        ocrBtn.title = 'Run OCR on this file';
+        ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(url); };
+        card.querySelector('.doc-name').after(ocrBtn);
+    }
 
     const grid = document.createElement('div');
     grid.className = 'badge-grid';
@@ -146,7 +166,17 @@ export function renderNoMatchCard(fileName, url, file) {
     const baseName = file ? getPathParts(file, null).name : (existing?.name || fileName);
     const folder = file ? getPathParts(file, null).folder : (existing?.folder || state.basePath || '');
     const type = getFileType(fileName);
-    state.docDataCache[url] = { name: baseName, folder, fullPath: fileName, counts: {}, url, type };
+    const counts = {};
+    state.docDataCache[url] = { name: baseName, folder, fullPath: fileName, counts, url, type };
+
+    if (existing?._ocrCounts) {
+        for (const [kw, c] of Object.entries(existing._ocrCounts)) {
+            counts[kw] = (counts[kw] || 0) + c;
+        }
+        state.docDataCache[url]._originalCounts = existing._originalCounts;
+        state.docDataCache[url]._ocrCounts = existing._ocrCounts;
+        state.docDataCache[url]._ocrTotalMatches = existing._ocrTotalMatches;
+    }
 
     if (state.currentLayout === 'tree') { renderResultsArea(); return; }
 
@@ -163,6 +193,15 @@ export function renderNoMatchCard(fileName, url, file) {
     card.className = 'doc-card doc-card-minimal';
     card.dataset.type = type;
     card.innerHTML = `<div class="doc-name">${getFileIcon(fileName)} ${fileName}</div>`;
+    if (fn.isOcrEnabled() && type === 'pdf') {
+        const ocrState = fn.getOcrState(url);
+        const ocrBtn = document.createElement('button');
+        ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : '');
+        ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR \u2713' : 'OCR';
+        ocrBtn.title = 'Run OCR on this file';
+        ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(url); };
+        card.querySelector('.doc-name').after(ocrBtn);
+    }
 }
 
 function buildTreeData() {
@@ -224,6 +263,16 @@ function renderTree(node, path = '') {
             countSpan.className = 'tree-count';
             countSpan.textContent = totalMatches;
             fileSpan.appendChild(countSpan);
+        }
+
+        if (fn.isOcrEnabled() && doc.type === 'pdf') {
+            const ocrState = fn.getOcrState(doc.url);
+            const ocrBtn = document.createElement('span');
+            ocrBtn.className = 'ocr-toggle-tree' + (ocrState && ocrState.status === 'done' ? ' active' : '');
+            ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR\u2713' : 'OCR';
+            ocrBtn.title = 'Run OCR on this file';
+            ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(doc.url); };
+            fileSpan.appendChild(ocrBtn);
         }
 
         fileSpan.addEventListener('click', function(e) {
@@ -290,6 +339,15 @@ export function renderResultsArea() {
                 card.dataset.type = type;
                 card.onclick = () => { setActiveCard(card); _loadDocument(doc.url); _closeMobileSidebar(); };
                 card.innerHTML = `<div class="doc-name">${getFileIcon(doc.name)} ${doc.name}</div>`;
+                if (fn.isOcrEnabled() && doc.type === 'pdf') {
+                    const ocrState = fn.getOcrState(doc.url);
+                    const ocrBtn = document.createElement('button');
+                    ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : '');
+                    ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR \u2713' : 'OCR';
+                    ocrBtn.title = 'Run OCR on this file';
+                    ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(doc.url); };
+                    card.querySelector('.doc-name').after(ocrBtn);
+                }
                 const grid = document.createElement('div');
                 grid.className = 'badge-grid';
                 keywords.forEach(k => {
@@ -323,6 +381,15 @@ export function renderResultsArea() {
                 card.dataset.type = type;
                 card.onclick = () => { setActiveCard(card); _loadDocument(doc.url); _closeMobileSidebar(); };
                 card.innerHTML = `<div class="doc-name">${getFileIcon(doc.name)} ${doc.name}</div>`;
+                if (fn.isOcrEnabled() && doc.type === 'pdf') {
+                    const ocrState = fn.getOcrState(doc.url);
+                    const ocrBtn = document.createElement('button');
+                    ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : '');
+                    ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR \u2713' : 'OCR';
+                    ocrBtn.title = 'Run OCR on this file';
+                    ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(doc.url); };
+                    card.querySelector('.doc-name').after(ocrBtn);
+                }
                 dom.resultsArea.appendChild(card);
             }
         });

@@ -312,6 +312,7 @@ function customFindPrev() {
 
 export function toggleTheme() {
     const html = document.documentElement;
+    html.classList.add('transitioning');
     if (html.getAttribute('data-theme') === 'light') {
         html.setAttribute('data-theme', 'dark');
         localStorage.setItem('pdf_theme', 'dark');
@@ -321,6 +322,7 @@ export function toggleTheme() {
     }
     const btn = document.querySelector('#settingsMenu button[data-btn=theme]');
     if (btn) btn.textContent = html.getAttribute('data-theme') === 'light' ? 'Dark Mode' : 'Light Mode';
+    setTimeout(() => html.classList.remove('transitioning'), 350);
 }
 
 export function toggleSettings(e) {

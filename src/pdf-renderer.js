@@ -25,13 +25,24 @@ export async function setupVirtualPages() {
 
     const pagePromises = [];
     for (let i = 1; i <= state.totalPages; i++) {
-        pagePromises.push(state.pdfDoc.getPage(i));
+        pagePromises.push(state.pdfDoc.getPage(i).catch(() => null));
     }
     const pages = await Promise.all(pagePromises);
 
     for (let i = 0; i < pages.length; i++) {
         const pageNum = i + 1;
         const page = pages[i];
+        if (!page) {
+            state.pageHeights[pageNum] = 800;
+            const placeholder = document.createElement('div');
+            placeholder.className = 'page-placeholder';
+            placeholder.id = 'page-' + pageNum;
+            placeholder.dataset.pageNum = pageNum;
+            placeholder.style.setProperty('--base-w', 600);
+            placeholder.style.setProperty('--base-h', 800);
+            dom.viewer.appendChild(placeholder);
+            continue;
+        }
         const viewport = page.getViewport({ scale: 1.0 });
         state.pageHeights[pageNum] = viewport.height;
 
@@ -208,7 +219,7 @@ export async function renderPageNow(pageNum, forceScale = null) {
                 }
                 state.textPageCache[pageNum] = { text: pageText, viewport: vp1, items: textItems };
                 state.pageHeights[pageNum] = vp1.height;
-            });
+            }).catch(() => {});
         }
 
         const renderTask = page.render({ canvasContext: ctx, viewport: viewport });

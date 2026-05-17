@@ -130,14 +130,19 @@ export async function fetchPageItems(pageNum) {
     const cached = state.textPageCache[pageNum];
     if (!cached || cached.items) return cached?.items;
 
-    const page = await state.pdfDoc.getPage(pageNum);
-    const content = await page.getTextContent();
-    const items = [];
-    for (const item of content.items) {
-        items.push({ text: item.str, transform: item.transform, width: item.width, height: item.height });
+    try {
+        const page = await state.pdfDoc.getPage(pageNum);
+        const content = await page.getTextContent();
+        const items = [];
+        for (const item of content.items) {
+            items.push({ text: item.str, transform: item.transform, width: item.width, height: item.height });
+        }
+        cached.items = items;
+        return items;
+    } catch (err) {
+        console.warn('Failed to fetch page items for page ' + pageNum + ':', err.message);
+        return null;
     }
-    cached.items = items;
-    return items;
 }
 
 export async function performSearch(query) {

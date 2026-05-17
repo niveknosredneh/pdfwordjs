@@ -84,12 +84,13 @@ function loadPDF(fileUrl, keyword = '') {
                                 pageNum: p,
                                 content,
                                 viewport: page.getViewport({ scale: 1.0 })
-                            }))
-                        )
+                            })).catch(() => ({ pageNum: p, content: null, viewport: null }))
+                        ).catch(() => ({ pageNum: p, content: null, viewport: null }))
                     );
                 }
                 const allResults = await Promise.all(extractPromises);
                 for (const { pageNum, content, viewport } of allResults) {
+                    if (!content) continue;
                     let pageText = '';
                     const textItems = [];
                     for (const item of content.items) {

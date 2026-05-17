@@ -23,6 +23,13 @@
     --pdf-scale: 1.0;
 }
 
+html.transitioning,
+html.transitioning *,
+html.transitioning *::before,
+html.transitioning *::after {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease !important;
+}
+
 [data-theme="light"] {
     --green: #737373;
     --green-light: #a3a3a3;

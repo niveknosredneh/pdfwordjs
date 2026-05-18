@@ -2,6 +2,7 @@ import { state } from './state.js';
 import * as dom from './dom.js';
 import { fn } from './cross.js';
 import { evictCaches } from './file-handler.js';
+import { setScale, autoDetectScale } from './measure.js';
 
 function getDocTypeFromUrl(url) {
     const dataCached = state.docDataCache[url];
@@ -119,6 +120,15 @@ function loadPDF(fileUrl, keyword = '') {
                 }
                 dom.loaderProgressFill.style.width = '80%';
                 await fn.precomputeAllSearches();
+            }
+
+            // Auto-detect measurement scale from embedded metadata or page text
+            const detected = await autoDetectScale(fileUrl);
+            if (detected) {
+                setScale(detected);
+                const scaleInput = document.getElementById('scaleInput');
+                if (scaleInput) scaleInput.value = '1:' + detected;
+                fn.refreshAllMeasurements();
             }
 
             dom.loaderProgressFill.style.width = '100%';

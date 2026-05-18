@@ -846,6 +846,7 @@ export function setupEventListeners() {
         };
         scaleInput.addEventListener('change', updateScale);
         scaleInput.addEventListener('blur', updateScale);
+        scaleInput.value = '1:' + measure.getScale();
     }
 
     dom.viewerScroll.addEventListener('click', (e) => {

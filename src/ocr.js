@@ -136,18 +136,25 @@ async function startOcrForFile(url) {
             const viewport = page.getViewport({ scale: OCR_SCALE });
             const canvasWidth = Math.ceil(viewport.width);
             const canvasHeight = Math.ceil(viewport.height);
+            dom.statusBar.textContent = 'OCR page ' + pageNum + '/' + totalToProcess + ' - rendering page... - ' + (cacheEntry.fileName || 'document');
             const canvas = new OffscreenCanvas(canvasWidth, canvasHeight);
             const ctx = canvas.getContext('2d');
             await page.render({ canvasContext: ctx, viewport }).promise;
             const blob = await canvas.convertToBlob({ type: 'image/png' });
+            const startTime = Date.now();
+            const pulse = setInterval(() => {
+                const secs = Math.floor((Date.now() - startTime) / 1000);
+                dom.statusBar.textContent = 'OCR page ' + pageNum + '/' + totalToProcess + ' - recognizing ' + secs + 's - ' + (cacheEntry.fileName || 'document');
+            }, 500);
             const ocrResult = await runOcrOnImage(blob, pageNum, url, canvasWidth, canvasHeight);
+            clearInterval(pulse);
             pageWordData[pageNum - 1] = {
                 words: ocrResult.words || [],
                 imageWidth: ocrResult.imageWidth,
                 imageHeight: ocrResult.imageHeight,
                 flatText: ocrResult.text || ''
             };
-            dom.statusBar.textContent = 'OCR ' + pageNum + '/' + totalToProcess + ' - ' + (cacheEntry.fileName || 'document');
+            dom.statusBar.textContent = 'OCR page ' + pageNum + '/' + totalToProcess + ' done - ' + (cacheEntry.fileName || 'document');
             dom.progressBar.style.width = Math.round((pageNum / totalToProcess) * 100) + '%';
         } catch (err) {
             console.error('[OCR] Page ' + pageNum + ' error:', err);

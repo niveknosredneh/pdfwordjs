@@ -808,3 +808,71 @@ export function refreshAllMeasurements() {
 export function handleZoomChange() {
     renderAllMeasurements();
 }
+
+// ── auto scale detection ──
+
+function parseScaleString(str) {
+    // "1 mm = 50 mm" → 50
+    let m = str.match(/(\d+(?:\.\d+)?)\s*(?:mm|cm|m|in|ft|"|')\s*=\s*(\d+(?:\.\d+)?)\s*(?:mm|cm|m|in|ft|"|')/i);
+    if (m) {
+        const ratio = parseFloat(m[2]) / parseFloat(m[1]);
+        if (!isNaN(ratio) && ratio >= 0.001 && ratio <= MAX_SCALE) return Math.round(ratio);
+    }
+    // "1/8\" = 1'-0\"" → 96
+    m = str.match(/(\d+)\/(\d+)\s*"\s*=\s*(\d+)'\s*-\s*(\d+)"/);
+    if (m) {
+        const paper = parseFloat(m[1]) / parseFloat(m[2]);
+        const world = parseFloat(m[3]) * 12 + parseFloat(m[4]);
+        const ratio = world / paper;
+        if (!isNaN(ratio) && ratio >= 0.001 && ratio <= MAX_SCALE) return Math.round(ratio);
+    }
+    return null;
+}
+
+async function detectScaleFromRawPdf(fileUrl) {
+    try {
+        const resp = await fetch(fileUrl);
+        const buf = await resp.arrayBuffer();
+        const raw = new TextDecoder('latin1').decode(buf);
+
+        if (!raw.includes('/Measure')) return null;
+
+        const sf = raw.match(/\/ScaleFactor\s+(\d+(?:\.\d+)?)/);
+        if (sf) {
+            const v = parseFloat(sf[1]);
+            if (!isNaN(v) && v >= 0.001 && v <= MAX_SCALE) return Math.round(v);
+        }
+
+        const ss = raw.match(/\/ScaleString\s*\(([^)]*)\)/);
+        if (ss) {
+            const parsed = parseScaleString(ss[1]);
+            if (parsed) return parsed;
+        }
+    } catch (e) { /* fetch may fail for some URLs */ }
+    return null;
+}
+
+function detectScaleFromText() {
+    for (let p = 1; p <= state.totalPages; p++) {
+        const pageData = state.textPageCache[p];
+        if (!pageData) continue;
+        const text = pageData.text;
+
+        const m = text.match(/(?:scale|metric)\s*[:=-]?\s*(\d+)\s*:\s*(\d+)/i);
+        if (m) {
+            const scaleNum = parseInt(m[2], 10);
+            if (!isNaN(scaleNum) && scaleNum >= 1 && scaleNum <= MAX_SCALE) return scaleNum;
+        }
+    }
+    return null;
+}
+
+export async function autoDetectScale(fileUrl) {
+    let scale = await detectScaleFromRawPdf(fileUrl);
+    if (scale) return scale;
+
+    scale = detectScaleFromText();
+    if (scale) return scale;
+
+    return null;
+}

@@ -118,7 +118,7 @@ export function renderCard(fileName, counts, url, file) {
     if (fn.isOcrEnabled()) {
         const ocrState = fn.getOcrState(url);
         const ocrBtn = document.createElement('button');
-        ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : '');
+        ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : ocrState && ocrState.status === 'processing' ? ' ocr-pulsing' : '');
         ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR \u2713' : 'OCR';
         ocrBtn.title = 'Run OCR on this file';
         ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(url); };
@@ -196,7 +196,7 @@ export function renderNoMatchCard(fileName, url, file) {
     if (fn.isOcrEnabled() && type === 'pdf') {
         const ocrState = fn.getOcrState(url);
         const ocrBtn = document.createElement('button');
-        ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : '');
+        ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : ocrState && ocrState.status === 'processing' ? ' ocr-pulsing' : '');
         ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR \u2713' : 'OCR';
         ocrBtn.title = 'Run OCR on this file';
         ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(url); };
@@ -268,7 +268,7 @@ function renderTree(node, path = '') {
         if (fn.isOcrEnabled() && doc.type === 'pdf') {
             const ocrState = fn.getOcrState(doc.url);
             const ocrBtn = document.createElement('span');
-            ocrBtn.className = 'ocr-toggle-tree' + (ocrState && ocrState.status === 'done' ? ' active' : '');
+            ocrBtn.className = 'ocr-toggle-tree' + (ocrState && ocrState.status === 'done' ? ' active' : ocrState && ocrState.status === 'processing' ? ' ocr-pulsing' : '');
             ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR\u2713' : 'OCR';
             ocrBtn.title = 'Run OCR on this file';
             ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(doc.url); };
@@ -342,7 +342,7 @@ export function renderResultsArea() {
                 if (fn.isOcrEnabled() && doc.type === 'pdf') {
                     const ocrState = fn.getOcrState(doc.url);
                     const ocrBtn = document.createElement('button');
-                    ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : '');
+                    ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : ocrState && ocrState.status === 'processing' ? ' ocr-pulsing' : '');
                     ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR \u2713' : 'OCR';
                     ocrBtn.title = 'Run OCR on this file';
                     ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(doc.url); };
@@ -384,7 +384,7 @@ export function renderResultsArea() {
                 if (fn.isOcrEnabled() && doc.type === 'pdf') {
                     const ocrState = fn.getOcrState(doc.url);
                     const ocrBtn = document.createElement('button');
-                    ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : '');
+                    ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : ocrState && ocrState.status === 'processing' ? ' ocr-pulsing' : '');
                     ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR \u2713' : 'OCR';
                     ocrBtn.title = 'Run OCR on this file';
                     ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(doc.url); };

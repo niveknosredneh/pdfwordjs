@@ -172,6 +172,7 @@ export function activateTool(tool) {
         dom.viewerScroll.addEventListener('mousemove', onMouseMove);
         isListening = true;
     }
+    dom.viewerScroll.classList.add('is-measuring');
 }
 
 export function deactivateTool() {
@@ -183,6 +184,7 @@ export function deactivateTool() {
         dom.viewerScroll.removeEventListener('mousemove', onMouseMove);
         isListening = false;
     }
+    dom.viewerScroll.classList.remove('is-measuring');
     renderAllMeasurements();
 }
 
@@ -441,7 +443,7 @@ function createLabel(x, y, color, text, measId, measScale) {
     lbl.className = 'measure-label';
     lbl.style.left = (x + 6) + 'px';
     lbl.style.top = (y - 10) + 'px';
-    lbl.style.color = color;
+    lbl.style.color = '#000';
     lbl.style.borderColor = color;
     if (measId) {
         lbl.textContent = text + '  \u00D7';
@@ -463,6 +465,9 @@ function createLabel(x, y, color, text, measId, measScale) {
     return lbl;
 }
 
+const FINAL_COLOR = 'rgba(255, 60, 60, 0.9)';
+const FINAL_LINEW = 1.5;
+
 /** @param {number} x @param {number} y @param {number} tickLen @param {number} tickW @param {number} deg @param {string} color @param {string} className @param {string} [measId] */
 function createTick(x, y, tickLen, tickW, deg, color, className, measId) {
     const tick = document.createElement('div');
@@ -481,8 +486,7 @@ function renderDistance(p1, p2, label, isPreview, measId, measScale) {
     const pageEl = getPageEl(p1.page);
     if (!pageEl) return;
     const s = state.currentScale || 1;
-    const color = isPreview ? 'rgba(80, 255, 150, 0.75)' : 'rgba(255, 220, 40, 0.9)';
-    const lineW = isPreview ? 1 : 2;
+    const color = isPreview ? 'rgba(80, 255, 150, 0.75)' : FINAL_COLOR;
 
     const layer = getOrCreateLayer(pageEl);
 
@@ -495,16 +499,13 @@ function renderDistance(p1, p2, label, isPreview, measId, measScale) {
     const line = document.createElement('div');
     line.className = 'measure-line m-line';
     line.style.left = (p1.x * s) + 'px';
-    line.style.top = (p1.y * s) + 'px';
+    line.style.top = (p1.y * s - 1) + 'px';
     line.style.width = len + 'px';
+    line.style.height = FINAL_LINEW + 'px';
+    line.style.background = color;
     line.style.transform = 'rotate(' + angle + 'deg)';
-    line.dataset.lineW = lineW;
     line.dataset.color = color;
     if (measId) line.dataset.measId = measId;
-    if (!isPreview) {
-        line.classList.add('m-line-final');
-        line.style.borderTopColor = color;
-    }
     layer.appendChild(line);
 
     const tickLen = isPreview ? 8 : 10;
@@ -549,13 +550,12 @@ function renderPerimeter(points, label, isPreview, measId, measScale) {
     const pageEl = getPageEl(points[0].page);
     if (!pageEl) return;
     const s = state.currentScale || 1;
-    const color = isPreview ? 'rgba(80, 255, 150, 0.75)' : 'rgba(255, 220, 40, 0.9)';
-    const lineW = isPreview ? 1 : 2;
+    const color = isPreview ? 'rgba(80, 255, 150, 0.75)' : FINAL_COLOR;
     const layer = getOrCreateLayer(pageEl);
 
     for (let i = 0; i < points.length - 1; i++) {
         const p1 = points[i], p2 = points[i + 1];
-        drawLineSegment(layer, p1, p2, s, color, lineW, !isPreview, measId);
+        drawLineSegment(layer, p1, p2, s, color);
     }
 
     // Ticks only at first and last point
@@ -608,7 +608,7 @@ function renderPendingPerimeter() {
     const color = 'rgba(80, 255, 150, 0.75)';
 
     for (let i = 0; i < points.length - 1; i++) {
-        drawLineSegment(layer, points[i], points[i + 1], s, color, 1, true);
+        drawLineSegment(layer, points[i], points[i + 1], s, color);
     }
 
     // Ticks only at first and last point
@@ -653,8 +653,8 @@ function renderPendingPerimeter() {
     }
 }
 
-/** @param {HTMLElement} layer @param {{x:number, y:number}} p1 @param {{x:number, y:number}} p2 @param {number} s @param {string} color @param {number} lineW @param {boolean} finalStyle @param {string} [measId] */
-function drawLineSegment(layer, p1, p2, s, color, lineW, finalStyle, measId) {
+/** @param {HTMLElement} layer @param {{x:number, y:number}} p1 @param {{x:number, y:number}} p2 @param {number} s @param {string} color @param {string} [measId] */
+function drawLineSegment(layer, p1, p2, s, color, measId) {
     const dx = (p2.x - p1.x) * s;
     const dy = (p2.y - p1.y) * s;
     const len = Math.sqrt(dx * dx + dy * dy);
@@ -664,16 +664,13 @@ function drawLineSegment(layer, p1, p2, s, color, lineW, finalStyle, measId) {
     const line = document.createElement('div');
     line.className = 'measure-line m-line';
     line.style.left = (p1.x * s) + 'px';
-    line.style.top = (p1.y * s) + 'px';
+    line.style.top = (p1.y * s - 1) + 'px';
     line.style.width = len + 'px';
+    line.style.height = FINAL_LINEW + 'px';
+    line.style.background = color;
     line.style.transform = 'rotate(' + angle + 'deg)';
-    line.dataset.lineW = lineW;
     line.dataset.color = color;
     if (measId) line.dataset.measId = measId;
-    if (finalStyle) {
-        line.classList.add('m-line-final');
-        line.style.borderTopColor = color;
-    }
     layer.appendChild(line);
 }
 
@@ -682,13 +679,12 @@ function renderArea(points, label, isPreview, measId, measScale) {
     const pageEl = getPageEl(points[0].page);
     if (!pageEl) return;
     const s = state.currentScale || 1;
-    const color = isPreview ? 'rgba(80, 255, 150, 0.75)' : 'rgba(255, 220, 40, 0.9)';
-    const lineW = isPreview ? 1 : 2;
+    const color = isPreview ? 'rgba(80, 255, 150, 0.75)' : FINAL_COLOR;
     const layer = getOrCreateLayer(pageEl);
 
     for (let i = 0; i < points.length; i++) {
         const p1 = points[i], p2 = points[(i + 1) % points.length];
-        drawLineSegment(layer, p1, p2, s, color, lineW, !isPreview, measId);
+        drawLineSegment(layer, p1, p2, s, color, measId);
     }
 
     // fill
@@ -780,14 +776,25 @@ function addGhostLabel(layer, x, y, text) {
 }
 
 function addArrow(layer, x, y, angleDeg, color, measId) {
-    const arrow = document.createElement('div');
-    arrow.className = 'measure-arrow';
-    arrow.style.left = x + 'px';
-    arrow.style.top = y + 'px';
-    arrow.style.borderColor = 'transparent transparent transparent ' + color;
-    arrow.style.transform = 'translate(-8px, -5px) rotate(' + angleDeg + 'deg)';
-    if (measId) arrow.dataset.measId = measId;
-    layer.appendChild(arrow);
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '12');
+    svg.setAttribute('height', '14');
+    svg.style.position = 'absolute';
+    svg.style.left = (x - 10) + 'px';
+    svg.style.top = (y - 7) + 'px';
+    svg.style.transform = 'rotate(' + angleDeg + 'deg)';
+    svg.style.transformOrigin = '10px 7px';
+    svg.style.overflow = 'visible';
+    svg.style.pointerEvents = 'none';
+    svg.style.zIndex = '6';
+    if (measId) svg.dataset.measId = measId;
+
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    poly.setAttribute('points', '10,7 0,0 0,14');
+    poly.setAttribute('fill', color);
+    if (measId) poly.dataset.measId = measId;
+    svg.appendChild(poly);
+    layer.appendChild(svg);
 }
 
 /** @param {HTMLElement} pageEl @returns {HTMLElement} */

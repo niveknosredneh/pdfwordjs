@@ -557,19 +557,19 @@ body {
 .toolbar-measure button.active-tool { background: var(--green); color: white; }
 
 /* ── measurement overlays ── */
+.is-measuring .pdf-page { cursor: crosshair; }
+.is-measuring .textLayer > span { cursor: crosshair; pointer-events: none; }
 .measure-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; pointer-events: none; z-index: 4; }
 .measure-line { position: absolute; pointer-events: none; z-index: 5; }
-.m-line { transform-origin: 0 50%; background: none; }
-.m-line-final { border-top-style: solid; height: 0; background: none; }
+.m-line { transform-origin: 0 50%; }
 .measure-tick { position: absolute; pointer-events: none; z-index: 6; transform-origin: 50% 50%; }
 .measure-tick-pending { position: absolute; pointer-events: none; z-index: 6; transform-origin: 50% 50%; background: var(--green); }
-.measure-label { position: absolute; font-size: 11px; background: var(--toolbar-bg); padding: 1px 5px; border-radius: 3px; z-index: 7; white-space: nowrap; font-family: sans-serif; border: 1px solid; pointer-events: auto; }
+.measure-label { position: absolute; font-size: 11px; background: rgba(255,255,255,0.3); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: 1px 5px; border-radius: 3px; z-index: 7; white-space: nowrap; font-family: sans-serif; border: 1px solid; pointer-events: auto; }
 .measure-fill { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
-.measure-line-ghost { position: absolute; pointer-events: none; z-index: 5; border-top: 2px dashed rgba(100, 180, 255, 0.5); height: 0; background: none; transform-origin: 0 50%; }
-.measure-arrow { position: absolute; pointer-events: none; z-index: 6; width: 0; height: 0; border-style: solid; border-width: 5px 0 5px 8px; transform-origin: 100% 50%; }
-.measure-highlight { filter: brightness(1.5) drop-shadow(0 0 3px rgba(255, 255, 255, 0.4)); }
-.measure-label-ghost { position: absolute; font-size: 11px; background: var(--toolbar-bg); padding: 1px 5px; border-radius: 3px; z-index: 7; white-space: nowrap; font-family: sans-serif; border: 1px solid rgba(100, 180, 255, 0.4); pointer-events: auto; color: rgba(100, 180, 255, 0.9); }
-.measure-fill-ghost { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; background: rgba(100, 180, 255, 0.08); }
+.measure-line-ghost { position: absolute; pointer-events: none; z-index: 5; border-top: 2px dashed rgba(0, 200, 255, 0.85); height: 0; background: none; transform-origin: 0 50%; }
+.measure-label-ghost { position: absolute; font-size: 11px; background: rgba(255,255,255,0.3); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: 1px 5px; border-radius: 3px; z-index: 7; white-space: nowrap; font-family: sans-serif; border: 1px solid rgba(0, 200, 255, 0.5); pointer-events: auto; color: #000; }
+.measure-fill-ghost { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; background: rgba(0, 200, 255, 0.12); }
+.measure-highlight { filter: brightness(1.3) drop-shadow(0 0 8px rgba(255, 60, 60, 0.7)); }
 
 .page-input, .match-input {
     width: 70px;

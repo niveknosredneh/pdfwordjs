@@ -9,6 +9,7 @@ state.renderedScales = {};
 const LOW_RES_SCALE = 0.2;
 
 let renderGen = 0;
+let _rendering = false;
 
 // ── initialization ──
 
@@ -119,7 +120,10 @@ function cancelAllRenders() {
 // ── the single coordinator ──
 
 async function refreshVisiblePages() {
-    const gen = ++renderGen;
+    if (_rendering) return;
+    _rendering = true;
+    try {
+        const gen = ++renderGen;
 
     const scrollTop = dom.viewerScroll.scrollTop;
     const scrollBottom = scrollTop + dom.viewerScroll.clientHeight;
@@ -161,6 +165,7 @@ async function refreshVisiblePages() {
         await renderPageNow(p.pn).catch(() => {});
         await new Promise(r => setTimeout(r, 0));
     }
+} finally { _rendering = false; }
 }
 
 // ── render a single page ──
@@ -355,10 +360,6 @@ export function setZoom(newScale, force = false) {
     cancelAllRenders();
 
     fn.clearHighlights();
-    if (state.pageObserver) {
-        state.pageObserver.disconnect();
-        setupPageObserver();
-    }
     if (state.searchResults.length > 0) fn.renderAllHighlights();
     fn.renderPageHeatmaps();
     fn.refreshAllMeasurements();

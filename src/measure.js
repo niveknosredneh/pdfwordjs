@@ -272,7 +272,8 @@ function finalizeDistance() {
         id: generateId(),
         type: 'distance',
         points: [p1, p2],
-        label
+        label,
+        scale: scaleX
     });
 
     pendingPoints = [];
@@ -313,7 +314,8 @@ function finalizePerimeter() {
         id: generateId(),
         type: 'polyline',
         points: pendingPoints.slice(),
-        label
+        label,
+        scale: scaleX
     });
 
     pendingPoints = [];
@@ -345,7 +347,8 @@ function finalizeArea() {
         type: 'area',
         points: pendingPoints.slice(),
         label,
-        areaMm2: realMm2
+        areaMm2: realMm2,
+        scale: scaleX
     });
 
     pendingPoints = [];
@@ -422,18 +425,18 @@ function getPageEl(pageNum) {
 /** @param {{id:string, type:string, points:Array, label:string, areaMm2?:number}} m */
 function renderMeasurement(m) {
     if (m.type === 'distance') {
-        renderDistance(m.points[0], m.points[1], m.label, false, m.id);
+        renderDistance(m.points[0], m.points[1], m.label, false, m.id, m.scale);
     } else if (m.type === 'polyline') {
-        renderPerimeter(m.points, m.label, false, m.id);
+        renderPerimeter(m.points, m.label, false, m.id, m.scale);
     } else if (m.type === 'area') {
-        renderArea(m.points, m.label, false, m.id);
+        renderArea(m.points, m.label, false, m.id, m.scale);
     }
 }
 
 // ── label helper ──
 
 /** @param {number} x @param {number} y @param {string} color @param {string} text @param {string} [measId] */
-function createLabel(x, y, color, text, measId) {
+function createLabel(x, y, color, text, measId, measScale) {
     const lbl = document.createElement('div');
     lbl.className = 'measure-label';
     lbl.style.left = (x + 6) + 'px';
@@ -442,11 +445,17 @@ function createLabel(x, y, color, text, measId) {
     lbl.style.borderColor = color;
     if (measId) {
         lbl.textContent = text + '  \u00D7';
-        lbl.title = 'Click to delete';
+        lbl.title = text + ' @ 1:' + (measScale ?? scaleX) + '\nClick to delete';
         lbl.style.cursor = 'pointer';
         lbl.addEventListener('click', (e) => {
             e.stopPropagation();
             deleteMeasurement(measId);
+        });
+        lbl.addEventListener('mouseenter', () => {
+            document.querySelectorAll('[data-meas-id="' + measId + '"]').forEach(el => el.classList.add('measure-highlight'));
+        });
+        lbl.addEventListener('mouseleave', () => {
+            document.querySelectorAll('[data-meas-id="' + measId + '"]').forEach(el => el.classList.remove('measure-highlight'));
         });
     } else {
         lbl.textContent = text;
@@ -454,8 +463,8 @@ function createLabel(x, y, color, text, measId) {
     return lbl;
 }
 
-/** @param {number} x @param {number} y @param {number} tickLen @param {number} tickW @param {number} deg @param {string} color @param {string} className */
-function createTick(x, y, tickLen, tickW, deg, color, className) {
+/** @param {number} x @param {number} y @param {number} tickLen @param {number} tickW @param {number} deg @param {string} color @param {string} className @param {string} [measId] */
+function createTick(x, y, tickLen, tickW, deg, color, className, measId) {
     const tick = document.createElement('div');
     tick.className = className;
     tick.style.left = (x - tickLen / 2) + 'px';
@@ -464,14 +473,15 @@ function createTick(x, y, tickLen, tickW, deg, color, className) {
     tick.style.height = tickW + 'px';
     tick.style.background = color;
     tick.style.transform = 'rotate(' + deg + 'deg)';
+    if (measId) tick.dataset.measId = measId;
     return tick;
 }
 
-function renderDistance(p1, p2, label, isPreview, measId) {
+function renderDistance(p1, p2, label, isPreview, measId, measScale) {
     const pageEl = getPageEl(p1.page);
     if (!pageEl) return;
     const s = state.currentScale || 1;
-    const color = isPreview ? 'var(--green)' : 'var(--highlight-current)';
+    const color = isPreview ? 'rgba(80, 255, 150, 0.75)' : 'rgba(255, 220, 40, 0.9)';
     const lineW = isPreview ? 1 : 2;
 
     const layer = getOrCreateLayer(pageEl);
@@ -490,6 +500,7 @@ function renderDistance(p1, p2, label, isPreview, measId) {
     line.style.transform = 'rotate(' + angle + 'deg)';
     line.dataset.lineW = lineW;
     line.dataset.color = color;
+    if (measId) line.dataset.measId = measId;
     if (!isPreview) {
         line.classList.add('m-line-final');
         line.style.borderTopColor = color;
@@ -502,14 +513,20 @@ function renderDistance(p1, p2, label, isPreview, measId) {
     for (const p of [p1, p2]) {
         const tx = p.x * s;
         const ty = p.y * s;
-        const tick = createTick(tx, ty, tickLen, tickW, tickAngle, color, 'measure-tick');
+        const tick = createTick(tx, ty, tickLen, tickW, tickAngle, color, 'measure-tick', measId);
         layer.appendChild(tick);
     }
+
+    // Arrows positioned inside the line, pointing outward toward the end ticks
+    const ARR = 0;
+    const aRad = angle * Math.PI / 180;
+    addArrow(layer, p1.x * s + ARR * Math.cos(aRad), p1.y * s + ARR * Math.sin(aRad), angle + 180, color, measId);
+    addArrow(layer, p2.x * s - ARR * Math.cos(aRad), p2.y * s - ARR * Math.sin(aRad), angle, color, measId);
 
     if (label) {
         const midX = ((p1.x + p2.x) / 2) * s;
         const midY = ((p1.y + p2.y) / 2) * s;
-        const lbl = createLabel(midX, midY, color, label, measId);
+        const lbl = createLabel(midX, midY, color, label, measId, measScale);
         layer.appendChild(lbl);
     }
 }
@@ -522,49 +539,61 @@ function renderPendingPoint() {
     const layer = getOrCreateLayer(pageEl);
     const tx = p.x * s;
     const ty = p.y * s;
-    const tick = createTick(tx, ty, 10, 2, 0, 'var(--green)', 'measure-tick-pending');
+    const tick = createTick(tx, ty, 10, 2, 0, 'rgba(80, 255, 150, 0.75)', 'measure-tick-pending');
     tick.style.boxShadow = '0 0 0 1px rgba(255,255,255,0.6)';
     layer.appendChild(tick);
 }
 
-function renderPerimeter(points, label, isPreview, measId) {
+function renderPerimeter(points, label, isPreview, measId, measScale) {
     if (points.length < 2) return;
     const pageEl = getPageEl(points[0].page);
     if (!pageEl) return;
     const s = state.currentScale || 1;
-    const color = isPreview ? 'var(--green)' : 'var(--highlight-current)';
+    const color = isPreview ? 'rgba(80, 255, 150, 0.75)' : 'rgba(255, 220, 40, 0.9)';
     const lineW = isPreview ? 1 : 2;
     const layer = getOrCreateLayer(pageEl);
 
     for (let i = 0; i < points.length - 1; i++) {
         const p1 = points[i], p2 = points[i + 1];
-        drawLineSegment(layer, p1, p2, s, color, lineW, !isPreview);
+        drawLineSegment(layer, p1, p2, s, color, lineW, !isPreview, measId);
     }
 
+    // Ticks only at first and last point
     const tickLen = isPreview ? 8 : 10;
     const tickW = 2;
-    for (let i = 0; i < points.length; i++) {
-        const p = points[i];
+    for (const idx of [0, points.length - 1]) {
+        if (idx < 0) continue;
+        const p = points[idx];
         let deg = 0;
-        if (i > 0) {
-            const dx = (p.x - points[i - 1].x) * s;
-            const dy = (p.y - points[i - 1].y) * s;
+        if (idx === 0 && points.length > 1) {
+            const dx = (points[1].x - p.x) * s;
+            const dy = (points[1].y - p.y) * s;
             deg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
-        } else if (points.length > 1) {
-            const dx = (points[i + 1].x - p.x) * s;
-            const dy = (points[i + 1].y - p.y) * s;
+        } else if (idx === points.length - 1 && points.length > 1) {
+            const dx = (p.x - points[idx - 1].x) * s;
+            const dy = (p.y - points[idx - 1].y) * s;
             deg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
         }
         const tx = p.x * s;
         const ty = p.y * s;
-        const tick = createTick(tx, ty, tickLen, tickW, deg, color, 'measure-tick');
+        const tick = createTick(tx, ty, tickLen, tickW, deg, color, 'measure-tick', measId);
         layer.appendChild(tick);
+    }
+
+    // Arrows positioned inside the line, pointing outward toward the end ticks
+    if (points.length >= 2) {
+        const ARR = 0;
+        const a0Rad = Math.atan2(points[1].y - points[0].y, points[1].x - points[0].x);
+        addArrow(layer, points[0].x * s + ARR * Math.cos(a0Rad), points[0].y * s + ARR * Math.sin(a0Rad), a0Rad * 180 / Math.PI + 180, color, measId);
+        const n = points.length - 1;
+        const aNRad = Math.atan2(points[n].y - points[n - 1].y, points[n].x - points[n - 1].x);
+        addArrow(layer, points[n].x * s - ARR * Math.cos(aNRad), points[n].y * s - ARR * Math.sin(aNRad), aNRad * 180 / Math.PI, color, measId);
     }
 
     if (label) {
         const cx = points.reduce((sum, p) => sum + p.x, 0) / points.length;
         const cy = points.reduce((sum, p) => sum + p.y, 0) / points.length;
-        const lbl = createLabel(cx * s, cy * s, color, label, measId);
+        const lbl = createLabel(cx * s, cy * s, color, label, measId, measScale);
         layer.appendChild(lbl);
     }
 }
@@ -576,19 +605,25 @@ function renderPendingPerimeter() {
     if (!pageEl) return;
     const s = state.currentScale || 1;
     const layer = getOrCreateLayer(pageEl);
-    const color = 'var(--green)';
+    const color = 'rgba(80, 255, 150, 0.75)';
 
     for (let i = 0; i < points.length - 1; i++) {
         drawLineSegment(layer, points[i], points[i + 1], s, color, 1, true);
     }
 
+    // Ticks only at first and last point
     const tickLen = 8, tickW = 2;
-    for (let i = 0; i < points.length; i++) {
-        const p = points[i];
+    for (const idx of [0, points.length - 1]) {
+        if (idx < 0) continue;
+        const p = points[idx];
         let deg = 0;
-        if (i < points.length - 1) {
-            const dx = (points[i + 1].x - p.x) * s;
-            const dy = (points[i + 1].y - p.y) * s;
+        if (idx === 0 && points.length > 1) {
+            const dx = (points[1].x - p.x) * s;
+            const dy = (points[1].y - p.y) * s;
+            deg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+        } else if (idx === points.length - 1 && points.length > 1) {
+            const dx = (p.x - points[idx - 1].x) * s;
+            const dy = (p.y - points[idx - 1].y) * s;
             deg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
         }
         const tx = p.x * s;
@@ -597,19 +632,29 @@ function renderPendingPerimeter() {
         layer.appendChild(tick);
     }
 
+    // Arrows positioned inside the line, pointing outward toward the end ticks
+    if (points.length >= 2) {
+        const ARR = 0;
+        const a0Rad = Math.atan2(points[1].y - points[0].y, points[1].x - points[0].x);
+        addArrow(layer, points[0].x * s + ARR * Math.cos(a0Rad), points[0].y * s + ARR * Math.sin(a0Rad), a0Rad * 180 / Math.PI + 180, color);
+        const n = points.length - 1;
+        const aNRad = Math.atan2(points[n].y - points[n - 1].y, points[n].x - points[n - 1].x);
+        addArrow(layer, points[n].x * s - ARR * Math.cos(aNRad), points[n].y * s - ARR * Math.sin(aNRad), aNRad * 180 / Math.PI, color);
+    }
+
     // running length label for perimeter/area
     const totalPdf = polylineLength(points, false);
     if (activeTool === 'perimeter') {
         const realMm = realWorldMm(totalPdf);
         const lblText = formatLength(realMm);
         const last = points[points.length - 1];
-        const lbl = createLabel(last.x * s + 10, last.y * s - 10, 'var(--green)', lblText);
+        const lbl = createLabel(last.x * s + 10, last.y * s - 10, color, lblText);
         layer.appendChild(lbl);
     }
 }
 
-/** @param {HTMLElement} layer @param {{x:number, y:number}} p1 @param {{x:number, y:number}} p2 @param {number} s @param {string} color @param {number} lineW @param {boolean} finalStyle */
-function drawLineSegment(layer, p1, p2, s, color, lineW, finalStyle) {
+/** @param {HTMLElement} layer @param {{x:number, y:number}} p1 @param {{x:number, y:number}} p2 @param {number} s @param {string} color @param {number} lineW @param {boolean} finalStyle @param {string} [measId] */
+function drawLineSegment(layer, p1, p2, s, color, lineW, finalStyle, measId) {
     const dx = (p2.x - p1.x) * s;
     const dy = (p2.y - p1.y) * s;
     const len = Math.sqrt(dx * dx + dy * dy);
@@ -624,6 +669,7 @@ function drawLineSegment(layer, p1, p2, s, color, lineW, finalStyle) {
     line.style.transform = 'rotate(' + angle + 'deg)';
     line.dataset.lineW = lineW;
     line.dataset.color = color;
+    if (measId) line.dataset.measId = measId;
     if (finalStyle) {
         line.classList.add('m-line-final');
         line.style.borderTopColor = color;
@@ -631,32 +677,18 @@ function drawLineSegment(layer, p1, p2, s, color, lineW, finalStyle) {
     layer.appendChild(line);
 }
 
-function renderArea(points, label, isPreview, measId) {
+function renderArea(points, label, isPreview, measId, measScale) {
     if (points.length < 3) return;
     const pageEl = getPageEl(points[0].page);
     if (!pageEl) return;
     const s = state.currentScale || 1;
-    const color = isPreview ? 'var(--green)' : 'var(--highlight-current)';
+    const color = isPreview ? 'rgba(80, 255, 150, 0.75)' : 'rgba(255, 220, 40, 0.9)';
     const lineW = isPreview ? 1 : 2;
     const layer = getOrCreateLayer(pageEl);
 
     for (let i = 0; i < points.length; i++) {
         const p1 = points[i], p2 = points[(i + 1) % points.length];
-        drawLineSegment(layer, p1, p2, s, color, lineW, !isPreview);
-    }
-
-    const tickLen = isPreview ? 8 : 10;
-    const tickW = 2;
-    for (let i = 0; i < points.length; i++) {
-        const p = points[i];
-        const prev = points[(i - 1 + points.length) % points.length];
-        const dx = (p.x - prev.x) * s;
-        const dy = (p.y - prev.y) * s;
-        const deg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
-        const tx = p.x * s;
-        const ty = p.y * s;
-        const tick = createTick(tx, ty, tickLen, tickW, deg, color, 'measure-tick');
-        layer.appendChild(tick);
+        drawLineSegment(layer, p1, p2, s, color, lineW, !isPreview, measId);
     }
 
     // fill
@@ -664,25 +696,98 @@ function renderArea(points, label, isPreview, measId) {
     fill.className = 'measure-fill';
     const clip = points.map(p => (p.x * s) + 'px ' + (p.y * s) + 'px').join(', ');
     fill.style.clipPath = 'polygon(' + clip + ')';
-    fill.style.background = color + '18';
+    fill.style.background = color + '25';
+    if (measId) fill.dataset.measId = measId;
     layer.appendChild(fill);
 
     if (label) {
         const cx = points.reduce((sum, p) => sum + p.x, 0) / points.length;
         const cy = points.reduce((sum, p) => sum + p.y, 0) / points.length;
-        const lbl = createLabel(cx * s, cy * s, color, label, measId);
+        const lbl = createLabel(cx * s, cy * s, color, label, measId, measScale);
         layer.appendChild(lbl);
     }
 }
 
 function renderPreviewLine() {
-    if (!previewLine) return;
-    const p1 = { x: previewLine.x1, y: previewLine.y1 };
-    const p2 = { x: previewLine.x2, y: previewLine.y2 };
-    const pdfDist = distanceBetween(p1, p2);
-    const realMm = realWorldMm(pdfDist);
-    const label = formatLength(realMm);
-    renderDistance(p1, p2, label, true);
+    if (!previewLine || !activePage) return;
+    const s = state.currentScale || 1;
+    const pageEl = getPageEl(activePage);
+    if (!pageEl) return;
+    const layer = getOrCreateLayer(pageEl);
+
+    const last = { x: previewLine.x1, y: previewLine.y1 };
+    const mouse = { x: previewLine.x2, y: previewLine.y2 };
+
+    drawGhostSegment(layer, last, mouse, s);
+
+    if (activeTool === 'distance') {
+        const real = realWorldMm(distanceBetween(last, mouse));
+        addGhostLabel(layer, (last.x + mouse.x) / 2 * s, (last.y + mouse.y) / 2 * s, formatLength(real));
+    } else if (activeTool === 'perimeter') {
+        const allPoints = [...pendingPoints, mouse];
+        const total = polylineLength(allPoints, false);
+        addGhostLabel(layer, (last.x + mouse.x) / 2 * s + 10, (last.y + mouse.y) / 2 * s - 10, formatLength(realWorldMm(total)));
+    } else if (activeTool === 'area') {
+        if (pendingPoints.length >= 2) {
+            const first = pendingPoints[0];
+            drawGhostSegment(layer, mouse, first, s);
+
+            const allPoints = [...pendingPoints, mouse];
+            const totalPdf = polylineLength(allPoints, false);
+            addGhostLabel(layer, (last.x + mouse.x) / 2 * s + 10, (last.y + mouse.y) / 2 * s - 10, 'Perim: ' + formatLength(realWorldMm(totalPdf)));
+
+            if (allPoints.length >= 3) {
+                const fill = document.createElement('div');
+                fill.className = 'measure-fill-ghost';
+                fill.style.clipPath = 'polygon(' + allPoints.map(p => (p.x * s) + 'px ' + (p.y * s) + 'px').join(', ') + ')';
+                layer.appendChild(fill);
+
+                const pdfArea = polygonArea(allPoints);
+                const realMm2 = pdfArea / (POINTS_PER_MM * POINTS_PER_MM) * scaleX * scaleX;
+                const cx = allPoints.reduce((sum, p) => sum + p.x, 0) / allPoints.length;
+                const cy = allPoints.reduce((sum, p) => sum + p.y, 0) / allPoints.length;
+                addGhostLabel(layer, (cx + 6) * s, (cy - 10) * s, 'Area: ' + formatArea(realMm2));
+            }
+        } else {
+            const real = realWorldMm(distanceBetween(last, mouse));
+            addGhostLabel(layer, (last.x + mouse.x) / 2 * s, (last.y + mouse.y) / 2 * s, formatLength(real));
+        }
+    }
+}
+
+function drawGhostSegment(layer, p1, p2, s) {
+    const dx = (p2.x - p1.x) * s;
+    const dy = (p2.y - p1.y) * s;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 0.5) return;
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    const line = document.createElement('div');
+    line.className = 'measure-line-ghost';
+    line.style.left = (p1.x * s) + 'px';
+    line.style.top = (p1.y * s) + 'px';
+    line.style.width = len + 'px';
+    line.style.transform = 'rotate(' + angle + 'deg)';
+    layer.appendChild(line);
+}
+
+function addGhostLabel(layer, x, y, text) {
+    const lbl = document.createElement('div');
+    lbl.className = 'measure-label-ghost';
+    lbl.style.left = (x + 6) + 'px';
+    lbl.style.top = (y - 10) + 'px';
+    lbl.textContent = text;
+    layer.appendChild(lbl);
+}
+
+function addArrow(layer, x, y, angleDeg, color, measId) {
+    const arrow = document.createElement('div');
+    arrow.className = 'measure-arrow';
+    arrow.style.left = x + 'px';
+    arrow.style.top = y + 'px';
+    arrow.style.borderColor = 'transparent transparent transparent ' + color;
+    arrow.style.transform = 'translate(-8px, -5px) rotate(' + angleDeg + 'deg)';
+    if (measId) arrow.dataset.measId = measId;
+    layer.appendChild(arrow);
 }
 
 /** @param {HTMLElement} pageEl @returns {HTMLElement} */

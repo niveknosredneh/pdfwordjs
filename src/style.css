@@ -558,6 +558,11 @@ body {
 .measure-tick-pending { position: absolute; pointer-events: none; z-index: 6; transform-origin: 50% 50%; background: var(--green); }
 .measure-label { position: absolute; font-size: 11px; background: var(--toolbar-bg); padding: 1px 5px; border-radius: 3px; z-index: 7; white-space: nowrap; font-family: sans-serif; border: 1px solid; pointer-events: auto; }
 .measure-fill { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
+.measure-line-ghost { position: absolute; pointer-events: none; z-index: 5; border-top: 2px dashed rgba(100, 180, 255, 0.5); height: 0; background: none; transform-origin: 0 50%; }
+.measure-arrow { position: absolute; pointer-events: none; z-index: 6; width: 0; height: 0; border-style: solid; border-width: 5px 0 5px 8px; transform-origin: 100% 50%; }
+.measure-highlight { filter: brightness(1.5) drop-shadow(0 0 3px rgba(255, 255, 255, 0.4)); }
+.measure-label-ghost { position: absolute; font-size: 11px; background: var(--toolbar-bg); padding: 1px 5px; border-radius: 3px; z-index: 7; white-space: nowrap; font-family: sans-serif; border: 1px solid rgba(100, 180, 255, 0.4); pointer-events: auto; color: rgba(100, 180, 255, 0.9); }
+.measure-fill-ghost { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; background: rgba(100, 180, 255, 0.08); }
 
 .page-input, .match-input {
     width: 70px;

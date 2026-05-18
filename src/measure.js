@@ -113,6 +113,18 @@ function distanceBetween(p1, p2) {
     return Math.sqrt(dx * dx + dy * dy);
 }
 
+/** @param {{x:number, y:number}} p1 @param {{x:number, y:number}} p2 @param {boolean} snap */
+function snapAngle45(p1, p2, snap) {
+    if (!snap) return p2;
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 0.5) return p2;
+    const angle = Math.atan2(dy, dx);
+    const snapped = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+    return { x: p1.x + dist * Math.cos(snapped), y: p1.y + dist * Math.sin(snapped) };
+}
+
 /** @param {Array<{x:number, y:number}>} points @param {boolean} [closed] */
 function polylineLength(points, closed) {
     let total = 0;
@@ -225,12 +237,18 @@ export function onPageClick(e) {
     const coords = pageEventToPdfCoords(e);
     if (!coords) return;
 
+    let pt = coords;
+    if (e.shiftKey && pendingPoints.length > 0) {
+        const snapped = snapAngle45(pendingPoints[pendingPoints.length - 1], coords, true);
+        pt = { ...coords, x: snapped.x, y: snapped.y };
+    }
+
     if (activeTool === 'distance') {
-        handleDistanceClick(coords);
+        handleDistanceClick(pt);
     } else if (activeTool === 'perimeter') {
-        handlePerimeterClick(coords);
+        handlePerimeterClick(pt);
     } else if (activeTool === 'area') {
-        handlePerimeterClick(coords);
+        handlePerimeterClick(pt);
     }
 }
 
@@ -381,11 +399,12 @@ function onMouseMove(e) {
         return;
     }
     const last = pendingPoints[pendingPoints.length - 1];
+    const snapped = e.shiftKey ? snapAngle45(last, coords, true) : coords;
     previewLine = {
         x1: last.x,
         y1: last.y,
-        x2: coords.x,
-        y2: coords.y
+        x2: snapped.x,
+        y2: snapped.y
     };
     renderAllMeasurements();
 }

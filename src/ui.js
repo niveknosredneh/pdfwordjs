@@ -324,7 +324,7 @@ export function toggleTheme() {
     }
     const btn = document.querySelector('#settingsMenu button[data-btn=theme]');
     if (btn) btn.textContent = html.getAttribute('data-theme') === 'light' ? 'Dark Mode' : 'Light Mode';
-    setTimeout(() => html.classList.remove('transitioning'), 350);
+    setTimeout(() => html.classList.remove('transitioning'), 850);
 }
 
 export function toggleSettings(e) {

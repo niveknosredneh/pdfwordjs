@@ -370,14 +370,15 @@ export function setZoom(newScale, force = false) {
 
     refreshVisiblePages();
 
-    if (anchorEl) {
-        requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+        if (anchorEl) {
             const newTop = anchorEl.offsetTop;
             const newH = anchorEl.offsetHeight;
             dom.viewerScroll.scrollTop = Math.max(0, newTop + anchorOffset * newH - dom.viewerScroll.clientHeight / 2);
             dom.viewerScroll.scrollLeft = oldScrollLeft;
-        });
-    }
+        }
+        refreshVisiblePages();
+    });
 }
 
 // ── search result pre-render ──

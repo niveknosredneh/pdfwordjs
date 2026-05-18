@@ -391,6 +391,7 @@ export function toggleSettings(e) {
     const ocrBtn = document.createElement('button');
     ocrBtn.className = 'toggle-btn' + (ocr.isOcrEnabled() ? ' on' : '');
     ocrBtn.style.cssText = btnStyle;
+    ocrBtn.title = 'Optical Character Recognition finds words in images';
     ocrBtn.onclick = function() {
         this.classList.toggle('on');
         ocr.toggleOcrGlobal();

@@ -272,7 +272,7 @@ function renderTree(node, path = '') {
             ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR\u2713' : 'OCR';
             ocrBtn.title = 'Run OCR on this file';
             ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(doc.url); };
-            fileSpan.appendChild(ocrBtn);
+            fileSpan.prepend(ocrBtn);
         }
 
         fileSpan.addEventListener('click', function(e) {

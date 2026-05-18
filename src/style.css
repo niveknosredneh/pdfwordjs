@@ -318,17 +318,21 @@ body {
 }
 
 .folder::before {
-    content: "▶";
-    display: inline-block;
+    content: "+";
+    display: flex;
+    align-items: center;
+    justify-content: center;
     margin-right: 4px;
-    font-size: 0.73em;
-    transition: transform 0.2s ease;
+    font-size: 0.85rem;
+    font-weight: 700;
     color: var(--grey-500);
     flex-shrink: 0;
+    width: 16px;
+    height: 16px;
 }
 
 .folder.open::before {
-    transform: rotate(90deg);
+    content: "−";
 }
 
 .folder:hover {
@@ -402,33 +406,10 @@ body {
     color: var(--green-light);
 }
 
-/* Tree connecting lines — 90° bend at each child */
-.tree-nested > li:not(.tree-child) {
-    position: relative;
-}
-
-.tree-nested > li:not(.tree-child)::before {
-    content: '';
-    position: absolute;
-    left: -6px;
-    top: -16px;
-    bottom: 50%;
-    width: 1px;
-    background: var(--grey-600);
-}
-
-.tree-nested > li:not(.tree-child):first-child::before {
-    top: -24px;
-}
-
-.tree-nested > li:not(.tree-child)::after {
-    content: '';
-    position: absolute;
-    left: -6px;
-    top: 50%;
-    width: 6px;
-    height: 1px;
-    background: var(--grey-600);
+/* Clean tree lines */
+.sidebar ul.tree-nested {
+    border-left: 1px solid var(--grey-600);
+    padding-left: 14px;
 }
 
 .doc-card {
@@ -483,14 +464,13 @@ body {
     border-color: var(--green);
 }
 .ocr-toggle-tree {
-    font-size: 0.65rem;
-    padding: 1px 5px;
+    font-size: 0.75rem;
+    padding: 1px 4px;
     border-radius: 3px;
     border: 1px solid var(--grey-600);
     background: transparent;
     color: var(--grey-500);
     cursor: pointer;
-    margin-left: auto;
     flex-shrink: 0;
     transition: background-color 0.2s, color 0.2s, border-color 0.2s;
 }
@@ -1058,8 +1038,8 @@ body {
         width: max-content;
     }
 
-    .tree-nested {
-        padding-left: 10px;
+    .sidebar ul.tree-nested {
+        padding-left: 12px;
     }
 
     .folder, .file {

@@ -318,17 +318,21 @@ body {
 }
 
 .folder::before {
-    content: "▶";
-    display: inline-block;
+    content: "+";
+    display: flex;
+    align-items: center;
+    justify-content: center;
     margin-right: 4px;
-    font-size: 0.73em;
-    transition: transform 0.2s ease;
+    font-size: 0.85rem;
+    font-weight: 700;
     color: var(--grey-500);
     flex-shrink: 0;
+    width: 16px;
+    height: 16px;
 }
 
 .folder.open::before {
-    transform: rotate(90deg);
+    content: "−";
 }
 
 .folder:hover {
@@ -402,33 +406,10 @@ body {
     color: var(--green-light);
 }
 
-/* Tree connecting lines — 90° bend at each child */
-.tree-nested > li:not(.tree-child) {
-    position: relative;
-}
-
-.tree-nested > li:not(.tree-child)::before {
-    content: '';
-    position: absolute;
-    left: -6px;
-    top: -16px;
-    bottom: 50%;
-    width: 1px;
-    background: var(--grey-600);
-}
-
-.tree-nested > li:not(.tree-child):first-child::before {
-    top: -24px;
-}
-
-.tree-nested > li:not(.tree-child)::after {
-    content: '';
-    position: absolute;
-    left: -6px;
-    top: 50%;
-    width: 6px;
-    height: 1px;
-    background: var(--grey-600);
+/* Clean tree lines */
+.sidebar ul.tree-nested {
+    border-left: 1px solid var(--grey-600);
+    padding-left: 14px;
 }
 
 .doc-card {
@@ -483,14 +464,13 @@ body {
     border-color: var(--green);
 }
 .ocr-toggle-tree {
-    font-size: 0.65rem;
-    padding: 1px 5px;
+    font-size: 0.75rem;
+    padding: 1px 4px;
     border-radius: 3px;
     border: 1px solid var(--grey-600);
     background: transparent;
     color: var(--grey-500);
     cursor: pointer;
-    margin-left: auto;
     flex-shrink: 0;
     transition: background-color 0.2s, color 0.2s, border-color 0.2s;
 }
@@ -578,6 +558,11 @@ body {
 .measure-tick-pending { position: absolute; pointer-events: none; z-index: 6; transform-origin: 50% 50%; background: var(--green); }
 .measure-label { position: absolute; font-size: 11px; background: var(--toolbar-bg); padding: 1px 5px; border-radius: 3px; z-index: 7; white-space: nowrap; font-family: sans-serif; border: 1px solid; pointer-events: auto; }
 .measure-fill { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
+.measure-line-ghost { position: absolute; pointer-events: none; z-index: 5; border-top: 2px dashed rgba(100, 180, 255, 0.5); height: 0; background: none; transform-origin: 0 50%; }
+.measure-arrow { position: absolute; pointer-events: none; z-index: 6; width: 0; height: 0; border-style: solid; border-width: 5px 0 5px 8px; transform-origin: 100% 50%; }
+.measure-highlight { filter: brightness(1.5) drop-shadow(0 0 3px rgba(255, 255, 255, 0.4)); }
+.measure-label-ghost { position: absolute; font-size: 11px; background: var(--toolbar-bg); padding: 1px 5px; border-radius: 3px; z-index: 7; white-space: nowrap; font-family: sans-serif; border: 1px solid rgba(100, 180, 255, 0.4); pointer-events: auto; color: rgba(100, 180, 255, 0.9); }
+.measure-fill-ghost { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; background: rgba(100, 180, 255, 0.08); }
 
 .page-input, .match-input {
     width: 70px;
@@ -1058,8 +1043,8 @@ body {
         width: max-content;
     }
 
-    .tree-nested {
-        padding-left: 10px;
+    .sidebar ul.tree-nested {
+        padding-left: 12px;
     }
 
     .folder, .file {

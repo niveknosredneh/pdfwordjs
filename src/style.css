@@ -489,7 +489,7 @@ body {
     50% { opacity: 1; color: var(--green-light); background: var(--green-bg); border-color: var(--green); }
 }
 .ocr-pulsing {
-    animation: ocr-pulse 3s ease-in-out infinite;
+    animation: ocr-pulse 1.5s ease-in-out infinite;
 }
 
 .doc-name { font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; color: var(--grey-300); word-break: break-word; line-height: 1.4; }

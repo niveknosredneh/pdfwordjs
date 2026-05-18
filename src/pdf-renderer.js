@@ -354,11 +354,6 @@ export function setZoom(newScale, force = false) {
 
     cancelAllRenders();
 
-    const ranges = getViewportRange();
-    for (const pn of ranges.visible) {
-        state.renderedScales[pn] = 0;
-    }
-
     fn.clearHighlights();
     if (state.pageObserver) {
         state.pageObserver.disconnect();
@@ -368,9 +363,15 @@ export function setZoom(newScale, force = false) {
     fn.renderPageHeatmaps();
     fn.refreshAllMeasurements();
 
-    refreshVisiblePages();
-
     requestAnimationFrame(() => {
+        // Force layout flush so offsetTop/offsetHeight reflect the new zoom
+        void dom.viewerScroll.scrollTop;
+
+        const ranges = getViewportRange();
+        for (const pn of ranges.visible) {
+            state.renderedScales[pn] = 0;
+        }
+
         if (anchorEl) {
             const newTop = anchorEl.offsetTop;
             const newH = anchorEl.offsetHeight;

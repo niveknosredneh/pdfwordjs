@@ -9,7 +9,7 @@ let ocrWorker = null;
 let workerTaskId = 0;
 const workerCallbacks = new Map();
 
-const OCR_SCALE = 2.0;
+const OCR_SCALE = 1.0;
 
 export function isOcrEnabled() {
     return ocrEnabled;
@@ -87,13 +87,18 @@ function initWorker() {
     };
 }
 
-const PAGE_TIMEOUT_MS = 30_000;
+const PAGE_TIMEOUT_MS = 300_000;
 
 function runOcrOnImage(blob, pageNum, cacheKey, imageWidth, imageHeight) {
     return new Promise((resolve, reject) => {
         const id = cacheKey + ':' + pageNum;
         const timer = setTimeout(() => {
             workerCallbacks.delete(id);
+            if (ocrWorker) {
+                try { ocrWorker.terminate(); } catch (e) { /* ignore */ }
+                ocrWorker = null;
+            }
+            initWorker();
             reject(new Error('OCR page ' + pageNum + ' timed out'));
         }, PAGE_TIMEOUT_MS);
         workerCallbacks.set(id, { resolve: (v) => { clearTimeout(timer); resolve(v); }, reject: (e) => { clearTimeout(timer); reject(e); } });
@@ -106,13 +111,25 @@ function runOcrOnImage(blob, pageNum, cacheKey, imageWidth, imageHeight) {
 
 async function startOcrForFile(url) {
     const cacheEntry = state.docTextCache[url];
-    if (!cacheEntry) return;
+    if (!cacheEntry) {
+        ocrFileState.set(url, { status: 'error', texts: [], counts: {}, totalMatches: 0 });
+        fn.renderResultsArea();
+        return;
+    }
 
     const numPages = cacheEntry.totalPages || 0;
-    if (!numPages) return;
+    if (!numPages) {
+        ocrFileState.set(url, { status: 'error', texts: [], counts: {}, totalMatches: 0 });
+        fn.renderResultsArea();
+        return;
+    }
 
     const lowerName = (cacheEntry.fileName || '').toLowerCase();
-    if (!lowerName.endsWith('.pdf')) return;
+    if (!lowerName.endsWith('.pdf')) {
+        ocrFileState.set(url, { status: 'error', texts: [], counts: {}, totalMatches: 0 });
+        fn.renderResultsArea();
+        return;
+    }
 
     initWorker();
 
@@ -124,11 +141,14 @@ async function startOcrForFile(url) {
         pdfDoc = await window.pdfjsLib.getDocument({ data: pdfData }).promise;
     } catch (err) {
         console.error('[OCR] Failed to load PDF for OCR:', err);
+        ocrFileState.set(url, { status: 'error', texts: [], counts: {}, totalMatches: 0 });
+        fn.renderResultsArea();
         return;
     }
 
     const actualNumPages = pdfDoc.numPages;
     const pageWordData = [];
+    const pageScaleFactors = [];
     const HIGHLIGHT_PAD = 3;
 
     const totalToProcess = Math.min(actualNumPages, numPages);
@@ -141,10 +161,18 @@ async function startOcrForFile(url) {
             const viewport = page.getViewport({ scale: OCR_SCALE });
             const canvasWidth = Math.ceil(viewport.width);
             const canvasHeight = Math.ceil(viewport.height);
+            const MAX_DIM = 2400;
+            let scaleFactor = 1;
+            if (canvasWidth > MAX_DIM || canvasHeight > MAX_DIM) {
+                scaleFactor = Math.min(MAX_DIM / canvasWidth, MAX_DIM / canvasHeight);
+            }
+            const renderWidth = Math.ceil(canvasWidth * scaleFactor);
+            const renderHeight = Math.ceil(canvasHeight * scaleFactor);
             dom.statusBar.textContent = 'OCR page ' + pageNum + '/' + totalToProcess + ' - rendering page... - ' + (cacheEntry.fileName || 'document');
-            const canvas = new OffscreenCanvas(canvasWidth, canvasHeight);
+            const canvas = new OffscreenCanvas(renderWidth, renderHeight);
             const ctx = canvas.getContext('2d');
-            await page.render({ canvasContext: ctx, viewport }).promise;
+            await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: OCR_SCALE * scaleFactor }) }).promise;
+            pageScaleFactors[pageNum - 1] = scaleFactor;
             const blob = await canvas.convertToBlob({ type: 'image/png' });
             const startTime = Date.now();
             const pulse = setInterval(() => {
@@ -200,6 +228,9 @@ async function startOcrForFile(url) {
 
         if (!combinedRegex) continue;
 
+        const sf = pageScaleFactors[p] || 1;
+        const effectiveScale = OCR_SCALE * sf;
+
         const wordRegex = new RegExp(combinedRegex.source, 'gi');
         for (const word of (pageData.words || [])) {
             const wordText = (word.text || '').trim();
@@ -219,10 +250,10 @@ async function startOcrForFile(url) {
                     const bbox = word.bbox;
                     if (!bbox || bbox.x0 === undefined) break;
 
-                    const x = (bbox.x0 / OCR_SCALE) - HIGHLIGHT_PAD;
-                    const y = (bbox.y0 / OCR_SCALE) - HIGHLIGHT_PAD;
-                    const width = ((bbox.x1 - bbox.x0) / OCR_SCALE) + HIGHLIGHT_PAD * 2;
-                    const height = ((bbox.y1 - bbox.y0) / OCR_SCALE) + HIGHLIGHT_PAD * 2;
+                    const x = (bbox.x0 / effectiveScale) - HIGHLIGHT_PAD;
+                    const y = (bbox.y0 / effectiveScale) - HIGHLIGHT_PAD;
+                    const width = ((bbox.x1 - bbox.x0) / effectiveScale) + HIGHLIGHT_PAD * 2;
+                    const height = ((bbox.y1 - bbox.y0) / effectiveScale) + HIGHLIGHT_PAD * 2;
 
                     keywordMatches[key].push({ page: pageNum, x, y, width, height });
                 }

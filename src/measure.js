@@ -286,14 +286,13 @@ function finalizeDistance() {
     const p2 = pendingPoints[1];
     const pdfDist = distanceBetween(p1, p2);
     const realMm = realWorldMm(pdfDist);
-    const label = formatLength(realMm);
+    const label = formatLength(realMm) + ' @ 1:' + scaleX;
 
     measurementsByDoc[url].push({
         id: generateId(),
         type: 'distance',
         points: [p1, p2],
-        label,
-        scale: scaleX
+        label
     });
 
     pendingPoints = [];
@@ -328,14 +327,13 @@ function finalizePerimeter() {
         totalPdf += distanceBetween(pendingPoints[i], pendingPoints[i + 1]);
     }
     const realMm = realWorldMm(totalPdf);
-    const label = formatLength(realMm);
+    const label = formatLength(realMm) + ' @ 1:' + scaleX;
 
     measurementsByDoc[url].push({
         id: generateId(),
         type: 'polyline',
         points: pendingPoints.slice(),
-        label,
-        scale: scaleX
+        label
     });
 
     pendingPoints = [];
@@ -360,15 +358,18 @@ function finalizeArea() {
 
     const pdfArea = polygonArea(pendingPoints);
     const realMm2 = pdfArea / (POINTS_PER_MM * POINTS_PER_MM) * scaleX * scaleX;
-    const label = formatArea(realMm2);
+
+    const pdfPerim = polylineLength(pendingPoints, true);
+    const realPerimMm = realWorldMm(pdfPerim);
+
+    const label = 'Area: ' + formatArea(realMm2) + '\nPerim: ' + formatLength(realPerimMm) + ' @ 1:' + scaleX;
 
     measurementsByDoc[url].push({
         id: generateId(),
         type: 'area',
         points: pendingPoints.slice(),
         label,
-        areaMm2: realMm2,
-        scale: scaleX
+        areaMm2: realMm2
     });
 
     pendingPoints = [];
@@ -446,18 +447,18 @@ function getPageEl(pageNum) {
 /** @param {{id:string, type:string, points:Array, label:string, areaMm2?:number}} m */
 function renderMeasurement(m) {
     if (m.type === 'distance') {
-        renderDistance(m.points[0], m.points[1], m.label, false, m.id, m.scale);
+        renderDistance(m.points[0], m.points[1], m.label, false, m.id);
     } else if (m.type === 'polyline') {
-        renderPerimeter(m.points, m.label, false, m.id, m.scale);
+        renderPerimeter(m.points, m.label, false, m.id);
     } else if (m.type === 'area') {
-        renderArea(m.points, m.label, false, m.id, m.scale);
+        renderArea(m.points, m.label, false, m.id);
     }
 }
 
 // ── label helper ──
 
 /** @param {number} x @param {number} y @param {string} color @param {string} text @param {string} [measId] */
-function createLabel(x, y, color, text, measId, measScale) {
+function createLabel(x, y, color, text, measId) {
     const lbl = document.createElement('div');
     lbl.className = 'measure-label';
     lbl.style.left = (x + 6) + 'px';
@@ -465,8 +466,9 @@ function createLabel(x, y, color, text, measId, measScale) {
     lbl.style.color = '#000';
     lbl.style.borderColor = color;
     if (measId) {
-        lbl.textContent = text + '  \u00D7';
-        lbl.title = text + ' @ 1:' + (measScale ?? scaleX) + '\nClick to delete';
+        const shortText = text.split(' @ ')[0];
+        lbl.innerHTML = shortText.replace(/\n/g, '<br>') + '  \u00D7';
+        lbl.title = text + '\nClick to delete';
         lbl.style.cursor = 'pointer';
         lbl.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -478,6 +480,8 @@ function createLabel(x, y, color, text, measId, measScale) {
         lbl.addEventListener('mouseleave', () => {
             document.querySelectorAll('[data-meas-id="' + measId + '"]').forEach(el => el.classList.remove('measure-highlight'));
         });
+    } else if (measId) {
+        lbl.textContent = text;
     } else {
         lbl.textContent = text;
     }
@@ -501,7 +505,7 @@ function createTick(x, y, tickLen, tickW, deg, color, className, measId) {
     return tick;
 }
 
-function renderDistance(p1, p2, label, isPreview, measId, measScale) {
+function renderDistance(p1, p2, label, isPreview, measId) {
     const pageEl = getPageEl(p1.page);
     if (!pageEl) return;
     const s = state.currentScale || 1;
@@ -546,7 +550,7 @@ function renderDistance(p1, p2, label, isPreview, measId, measScale) {
     if (label) {
         const midX = ((p1.x + p2.x) / 2) * s;
         const midY = ((p1.y + p2.y) / 2) * s;
-        const lbl = createLabel(midX, midY, color, label, measId, measScale);
+        const lbl = createLabel(midX, midY, color, label, measId);
         layer.appendChild(lbl);
     }
 }
@@ -564,7 +568,7 @@ function renderPendingPoint() {
     layer.appendChild(tick);
 }
 
-function renderPerimeter(points, label, isPreview, measId, measScale) {
+function renderPerimeter(points, label, isPreview, measId) {
     if (points.length < 2) return;
     const pageEl = getPageEl(points[0].page);
     if (!pageEl) return;
@@ -612,7 +616,7 @@ function renderPerimeter(points, label, isPreview, measId, measScale) {
     if (label) {
         const cx = points.reduce((sum, p) => sum + p.x, 0) / points.length;
         const cy = points.reduce((sum, p) => sum + p.y, 0) / points.length;
-        const lbl = createLabel(cx * s, cy * s, color, label, measId, measScale);
+        const lbl = createLabel(cx * s, cy * s, color, label, measId);
         layer.appendChild(lbl);
     }
 }
@@ -693,7 +697,7 @@ function drawLineSegment(layer, p1, p2, s, color, measId) {
     layer.appendChild(line);
 }
 
-function renderArea(points, label, isPreview, measId, measScale) {
+function renderArea(points, label, isPreview, measId) {
     if (points.length < 3) return;
     const pageEl = getPageEl(points[0].page);
     if (!pageEl) return;
@@ -718,7 +722,7 @@ function renderArea(points, label, isPreview, measId, measScale) {
     if (label) {
         const cx = points.reduce((sum, p) => sum + p.x, 0) / points.length;
         const cy = points.reduce((sum, p) => sum + p.y, 0) / points.length;
-        const lbl = createLabel(cx * s, cy * s, color, label, measId, measScale);
+        const lbl = createLabel(cx * s, cy * s, color, label, measId);
         layer.appendChild(lbl);
     }
 }

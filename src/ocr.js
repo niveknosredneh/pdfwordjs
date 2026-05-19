@@ -87,10 +87,16 @@ function initWorker() {
     };
 }
 
+const PAGE_TIMEOUT_MS = 30_000;
+
 function runOcrOnImage(blob, pageNum, cacheKey, imageWidth, imageHeight) {
     return new Promise((resolve, reject) => {
         const id = cacheKey + ':' + pageNum;
-        workerCallbacks.set(id, { resolve, reject });
+        const timer = setTimeout(() => {
+            workerCallbacks.delete(id);
+            reject(new Error('OCR page ' + pageNum + ' timed out'));
+        }, PAGE_TIMEOUT_MS);
+        workerCallbacks.set(id, { resolve: (v) => { clearTimeout(timer); resolve(v); }, reject: (e) => { clearTimeout(timer); reject(e); } });
         ocrWorker.postMessage({
             task: 'ocr-page',
             data: { imageData: blob, pageNum, cacheKey: id, imageWidth, imageHeight }

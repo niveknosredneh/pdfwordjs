@@ -560,31 +560,14 @@ export async function rescanWithNewKeywords() {
         const docCounts = result.counts || {};
         const totalMatches = result.totalMatches || 0;
 
-        const activeCard = dom.viewer.querySelector('.doc-card.active, .file.active')?.closest('.doc-card') || dom.viewer.querySelector('.doc-card.active');
-        if (activeCard) {
-            const cardName = activeCard.querySelector('.doc-name').textContent;
-            const badgeGrid = activeCard.querySelector('.badge-grid');
-            if (badgeGrid) {
-                badgeGrid.innerHTML = '';
-                keywords.forEach(k => {
-                    const count = docCounts[k] || 0;
-                    if (count > 0) {
-                        const b = document.createElement('div');
-                        b.className = 'badge';
-                        b.textContent = k + ': ' + count;
-                        b.onclick = (e) => {
-                            e.stopPropagation();
-                            fn.cycleSearch(k);
-                        };
-                        badgeGrid.appendChild(b);
-                    }
-                });
-            }
+        if (state.currentDocUrl && state.docDataCache[state.currentDocUrl]) {
+            state.docDataCache[state.currentDocUrl].counts = docCounts;
         }
 
         state.totalMatchesFound = totalMatches;
         fn.updateStats();
         fn.precomputeAllSearches();
+        if (state.currentDocUrl) fn.updateKeywordGrid(state.currentDocUrl);
     } catch (err) {
         console.error('[Worker] Rescan with new keywords error:', err);
     }

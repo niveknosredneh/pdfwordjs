@@ -4,6 +4,43 @@ import { fn } from './cross.js';
 
 let _loadDocument, _cycleSearch, _cycleDocSearch, _closeMobileSidebar;
 
+let _pulseInterval = null;
+let _pulseTick = 0;
+let _pulseStopTimer = null;
+
+function applyPulseStyle() {
+    const phase = Math.sin(_pulseTick * 0.1);
+    const opacity = 0.3 + (phase * 0.5 + 0.5) * 0.7;
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    document.documentElement.style.setProperty('--pulse-color', isLight ? '#000' : '#fff');
+    document.documentElement.style.setProperty('--pulse-opacity', opacity);
+}
+
+function syncOcrPulse() {
+    if (_pulseStopTimer) {
+        clearTimeout(_pulseStopTimer);
+        _pulseStopTimer = null;
+    }
+    if (!_pulseInterval) {
+        applyPulseStyle();
+        _pulseInterval = setInterval(() => {
+            _pulseTick++;
+            applyPulseStyle();
+            if (document.querySelectorAll('.ocr-pulsing').length === 0) {
+                if (!_pulseStopTimer) {
+                    _pulseStopTimer = setTimeout(() => {
+                        _pulseStopTimer = null;
+                        if (document.querySelectorAll('.ocr-pulsing').length === 0) {
+                            clearInterval(_pulseInterval);
+                            _pulseInterval = null;
+                        }
+                    }, 500);
+                }
+            }
+        }, 50);
+    }
+}
+
 export function setCallbacks(cbs) {
     _loadDocument = cbs.loadDocument;
     _cycleSearch = cbs.cycleSearch;
@@ -43,44 +80,21 @@ function getPathParts(file, baseFolderName) {
     return { name: fileName, folder: baseFolderName || state.basePath || '' };
 }
 
-function setActiveCard(card) {
-    document.querySelectorAll('.doc-card').forEach(c => c.classList.remove('active'));
-    card.classList.add('active');
-}
-
 export function setActiveCardFromUrl(url) {
-    document.querySelectorAll('.doc-card').forEach(c => c.classList.remove('active'));
-    const card = document.querySelector(`.doc-card[data-url="${CSS.escape(url)}"]`);
-    if (card) card.classList.add('active');
-
     document.querySelectorAll('.file.active').forEach(el => el.classList.remove('active'));
     const fileItem = document.querySelector(`.tree-file-item[data-url="${CSS.escape(url)}"]`);
     if (fileItem) {
         const fileSpan = fileItem.querySelector('.file');
         if (fileSpan) fileSpan.classList.add('active');
     }
-
-    if (state.currentLayout === 'tree') {
-        state.expandedTreeItems.clear();
-        state.expandedTreeItems.add(url);
-    }
+    updateKeywordGrid(url);
 }
 
 export function renderPlaceholderCard(fileName, url, file) {
     const type = getFileType(fileName);
     const { name: baseName, folder } = getPathParts(file, null);
     state.docDataCache[url] = { name: baseName, folder, fullPath: fileName, counts: {}, url, type };
-
-    if (state.currentLayout === 'tree') { renderResultsArea(); return; }
-
-    const card = document.createElement('div');
-    card.className = 'doc-card doc-card-minimal';
-    card.dataset.url = url;
-    card.dataset.type = type;
-    card.onclick = () => { setActiveCard(card); _loadDocument(url); _closeMobileSidebar(); };
-    card.innerHTML = `<div class="doc-name">${getFileIcon(fileName)} ${fileName}</div>`;
-    card.appendChild(document.createElement('div'));
-    dom.resultsArea.appendChild(card);
+    renderResultsArea();
 }
 
 export function renderCard(fileName, counts, url, file) {
@@ -99,66 +113,7 @@ export function renderCard(fileName, counts, url, file) {
         state.docDataCache[url]._ocrTotalMatches = existing._ocrTotalMatches;
     }
 
-    if (state.currentLayout === 'tree') { renderResultsArea(); return; }
-
-    let card = dom.resultsArea.querySelector(`.doc-card[data-url="${CSS.escape(url)}"]`);
-    if (!card) {
-        card = document.createElement('div');
-        card.className = 'doc-card';
-        card.dataset.url = url;
-        card.dataset.type = type;
-        card.onclick = () => { setActiveCard(card); _loadDocument(url); _closeMobileSidebar(); };
-        dom.resultsArea.appendChild(card);
-    }
-
-    card.className = 'doc-card';
-    card.dataset.type = type;
-    card.innerHTML = `<div class="doc-name">${getFileIcon(fileName)} ${fileName}</div>`;
-
-    if (fn.isOcrEnabled()) {
-        const ocrState = fn.getOcrState(url);
-        const ocrBtn = document.createElement('button');
-        ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : ocrState && ocrState.status === 'processing' ? ' ocr-pulsing' : '');
-        ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR \u2713' : 'OCR';
-        ocrBtn.title = 'Run OCR on this file';
-        ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(url); };
-        card.querySelector('.doc-name').after(ocrBtn);
-    }
-
-    const grid = document.createElement('div');
-    grid.className = 'badge-grid';
-
-    const keywordCounts = {};
-    const keywords = window.KEYWORDS || [];
-    keywords.forEach(k => {
-        const count = counts[k] || 0;
-        if (count > 0) keywordCounts[k] = count;
-    });
-    card.dataset.counts = JSON.stringify(keywordCounts);
-
-    keywords.forEach(k => {
-        const count = counts[k] || 0;
-        if (count > 0) {
-            const b = document.createElement('div');
-            b.className = 'badge';
-            b.dataset.keyword = k;
-            b.dataset.count = count;
-            b.textContent = `${k}: ${count}`;
-            b.onclick = (e) => {
-                e.stopPropagation();
-                setActiveCard(card);
-                _closeMobileSidebar();
-                if (state.currentDocUrl === url) {
-                    if (type === 'pdf') _cycleSearch(k);
-                    else _cycleDocSearch(k);
-                } else {
-                    _loadDocument(url, k);
-                }
-            };
-            grid.appendChild(b);
-        }
-    });
-    card.appendChild(grid);
+    renderResultsArea();
 }
 
 export function renderNoMatchCard(fileName, url, file) {
@@ -178,30 +133,7 @@ export function renderNoMatchCard(fileName, url, file) {
         state.docDataCache[url]._ocrTotalMatches = existing._ocrTotalMatches;
     }
 
-    if (state.currentLayout === 'tree') { renderResultsArea(); return; }
-
-    let card = dom.resultsArea.querySelector(`.doc-card[data-url="${CSS.escape(url)}"]`);
-    if (!card) {
-        card = document.createElement('div');
-        card.className = 'doc-card doc-card-minimal';
-        card.dataset.url = url;
-        card.dataset.type = type;
-        card.onclick = () => { setActiveCard(card); _loadDocument(url); _closeMobileSidebar(); };
-        dom.resultsArea.appendChild(card);
-    }
-
-    card.className = 'doc-card doc-card-minimal';
-    card.dataset.type = type;
-    card.innerHTML = `<div class="doc-name">${getFileIcon(fileName)} ${fileName}</div>`;
-    if (fn.isOcrEnabled() && type === 'pdf') {
-        const ocrState = fn.getOcrState(url);
-        const ocrBtn = document.createElement('button');
-        ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : ocrState && ocrState.status === 'processing' ? ' ocr-pulsing' : '');
-        ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR \u2713' : 'OCR';
-        ocrBtn.title = 'Run OCR on this file';
-        ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(url); };
-        card.querySelector('.doc-name').after(ocrBtn);
-    }
+    renderResultsArea();
 }
 
 function buildTreeData() {
@@ -257,6 +189,18 @@ function renderTree(node, path = '') {
         nameSpan.textContent = doc.name;
         fileSpan.appendChild(nameSpan);
 
+        if (doc.type === 'pdf') {
+            const ocrState = fn.getOcrState(doc.url);
+            if (ocrState && ocrState.status === 'processing') {
+                const ocrBtn = document.createElement('span');
+                ocrBtn.className = 'ocr-toggle-tree ocr-pulsing';
+                ocrBtn.textContent = 'OCR';
+                ocrBtn.title = 'OCR in progress...';
+                fileSpan.appendChild(ocrBtn);
+                syncOcrPulse();
+            }
+        }
+
         const totalMatches = Object.values(doc.counts).reduce((a, b) => a + b, 0);
         if (totalMatches > 0) {
             const countSpan = document.createElement('span');
@@ -265,50 +209,13 @@ function renderTree(node, path = '') {
             fileSpan.appendChild(countSpan);
         }
 
-        if (fn.isOcrEnabled() && doc.type === 'pdf') {
-            const ocrState = fn.getOcrState(doc.url);
-            const ocrBtn = document.createElement('span');
-            ocrBtn.className = 'ocr-toggle-tree' + (ocrState && ocrState.status === 'done' ? ' active' : ocrState && ocrState.status === 'processing' ? ' ocr-pulsing' : '');
-            ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR\u2713' : 'OCR';
-            ocrBtn.title = 'Run OCR on this file';
-            ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(doc.url); };
-            fileSpan.prepend(ocrBtn);
-        }
-
         fileSpan.addEventListener('click', function(e) {
             e.stopPropagation();
-            state.expandedTreeItems.clear();
-            state.expandedTreeItems.add(doc.url);
             _loadDocument(doc.url);
             _closeMobileSidebar();
             renderResultsArea();
         });
         li.appendChild(fileSpan);
-
-        if (totalMatches > 0) {
-            const kwUl = document.createElement('ul');
-            kwUl.className = 'tree-nested' + (state.expandedTreeItems.has(doc.url) ? ' expanded' : '');
-            const keywords = window.KEYWORDS || [];
-            keywords.forEach(k => {
-                const cnt = doc.counts[k] || 0;
-                if (cnt > 0) {
-                    const kwLi = document.createElement('li');
-                    kwLi.className = 'tree-child';
-                    kwLi.onclick = (e) => {
-                        e.stopPropagation();
-                        if (doc.url === state.currentDocUrl) {
-                            if (doc.type === 'pdf') _cycleSearch(k);
-                            else _cycleDocSearch(k);
-                        } else {
-                            _loadDocument(doc.url, k);
-                        }
-                    };
-                    kwLi.textContent = k + ': ' + cnt;
-                    kwUl.appendChild(kwLi);
-                }
-            });
-            li.appendChild(kwUl);
-        }
         ul.appendChild(li);
     }
     return ul;
@@ -316,86 +223,19 @@ function renderTree(node, path = '') {
 
 export function renderResultsArea() {
     dom.resultsArea.innerHTML = '';
-    dom.resultsArea.className = 'results-area' + (state.currentLayout === 'tree' ? ' tree-mode' : '');
+    dom.resultsArea.className = 'results-area';
 
-    if (state.currentLayout === 'tree') {
-        const treeData = buildTreeData();
-        const treeUl = renderTree(treeData);
-        treeUl.id = 'file-tree';
-        dom.resultsArea.appendChild(treeUl);
-        if (Object.keys(state.docDataCache).length === 0) {
-            dom.resultsArea.innerHTML = '<h1 class="status-msg">&#10548;</h1><h1 class="status-msg">Drop a folder to begin scanning</h1>';
-        }
-    } else {
-        const docs = Object.values(state.docDataCache);
-        docs.forEach(doc => {
-            const isActive = doc.url === state.currentDocUrl;
-            const type = getFileType(doc.name);
-            const keywords = window.KEYWORDS || [];
-            if (Object.keys(doc.counts).length > 0) {
-                const card = document.createElement('div');
-                card.className = 'doc-card' + (isActive ? ' active' : '');
-                card.dataset.url = doc.url;
-                card.dataset.type = type;
-                card.onclick = () => { setActiveCard(card); _loadDocument(doc.url); _closeMobileSidebar(); };
-                card.innerHTML = `<div class="doc-name">${getFileIcon(doc.name)} ${doc.name}</div>`;
-                if (fn.isOcrEnabled() && doc.type === 'pdf') {
-                    const ocrState = fn.getOcrState(doc.url);
-                    const ocrBtn = document.createElement('button');
-                    ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : ocrState && ocrState.status === 'processing' ? ' ocr-pulsing' : '');
-                    ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR \u2713' : 'OCR';
-                    ocrBtn.title = 'Run OCR on this file';
-                    ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(doc.url); };
-                    card.querySelector('.doc-name').after(ocrBtn);
-                }
-                const grid = document.createElement('div');
-                grid.className = 'badge-grid';
-                keywords.forEach(k => {
-                    const count = doc.counts[k] || 0;
-                    if (count > 0) {
-                        const b = document.createElement('div');
-                        b.className = 'badge';
-                        b.dataset.keyword = k;
-                        b.dataset.count = count;
-                        b.textContent = `${k}: ${count}`;
-                        b.onclick = (e) => {
-                            e.stopPropagation();
-                            setActiveCard(card);
-                            _closeMobileSidebar();
-                            if (state.currentDocUrl === doc.url) {
-                                if (type === 'pdf') _cycleSearch(k);
-                                else _cycleDocSearch(k);
-                            } else {
-                                _loadDocument(doc.url, k);
-                            }
-                        };
-                        grid.appendChild(b);
-                    }
-                });
-                card.appendChild(grid);
-                dom.resultsArea.appendChild(card);
-            } else {
-                const card = document.createElement('div');
-                card.className = 'doc-card doc-card-minimal';
-                card.dataset.url = doc.url;
-                card.dataset.type = type;
-                card.onclick = () => { setActiveCard(card); _loadDocument(doc.url); _closeMobileSidebar(); };
-                card.innerHTML = `<div class="doc-name">${getFileIcon(doc.name)} ${doc.name}</div>`;
-                if (fn.isOcrEnabled() && doc.type === 'pdf') {
-                    const ocrState = fn.getOcrState(doc.url);
-                    const ocrBtn = document.createElement('button');
-                    ocrBtn.className = 'ocr-toggle' + (ocrState && ocrState.status === 'done' ? ' active' : ocrState && ocrState.status === 'processing' ? ' ocr-pulsing' : '');
-                    ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR \u2713' : 'OCR';
-                    ocrBtn.title = 'Run OCR on this file';
-                    ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(doc.url); };
-                    card.querySelector('.doc-name').after(ocrBtn);
-                }
-                dom.resultsArea.appendChild(card);
-            }
-        });
-        if (docs.length === 0) {
-            dom.resultsArea.innerHTML = '<h1 class="status-msg">&#10548;</h1><h1 class="status-msg">Drop a folder to begin scanning</h1>';
-        }
+    const treeData = buildTreeData();
+    const treeUl = renderTree(treeData);
+    treeUl.id = 'file-tree';
+    dom.resultsArea.appendChild(treeUl);
+
+    if (Object.keys(state.docDataCache).length === 0) {
+        dom.resultsArea.innerHTML = '<h1 class="status-msg">&#10548;</h1><h1 class="status-msg">Drop a folder to begin scanning</h1>';
+    }
+
+    if (state.currentDocUrl) {
+        updateKeywordGrid(state.currentDocUrl);
     }
 }
 
@@ -409,18 +249,88 @@ export function updateStats() {
 }
 
 export function updateSidebarBadge() {
-    document.querySelectorAll('.badge').forEach(badge => {
-        const k = badge.dataset.keyword;
-        const total = parseInt(badge.dataset.count) || 0;
-        const cardUrl = badge.closest('.doc-card').dataset.url || '';
-        const isCurrentFile = cardUrl === state.currentDocUrl;
+    document.querySelectorAll('.kw-grid-cell').forEach(cell => {
+        const k = cell.dataset.keyword;
+        const total = parseInt(cell.dataset.count) || 0;
         const isActiveKeyword = k === state.activeKeyword;
-        if (isCurrentFile && isActiveKeyword && state.currentMatchIndex >= 0) {
-            badge.textContent = `${k}: ${(state.currentMatchIndex + 1).toString().padStart(Math.max(2, total.toString().length), ' ')}/${total.toString().padStart(Math.max(2, total.toString().length), ' ')}`;
+        const countSpan = cell.querySelector('.kw-cell-count');
+        
+        if (isActiveKeyword && state.currentMatchIndex >= 0) {
+            if (countSpan) countSpan.textContent = `${state.currentMatchIndex + 1}/${total}`;
+            cell.classList.add('active');
         } else {
-            badge.textContent = `${k}: ${total.toString().padStart(Math.max(2, total.toString().length), ' ')}`;
+            if (countSpan) countSpan.textContent = total;
+            cell.classList.remove('active');
         }
     });
+}
+
+export function updateKeywordGrid(url) {
+    const content = document.getElementById('kwGridContent');
+    const filenameEl = document.getElementById('kwGridFilename');
+    const ocrBtn = document.getElementById('kwGridOcrBtn');
+    if (!content) return;
+
+    const doc = state.docDataCache[url];
+
+    if (!doc) {
+        if (filenameEl) filenameEl.textContent = 'No file selected';
+        content.innerHTML = '<div class="kw-grid-empty">No file selected</div>';
+        if (ocrBtn) ocrBtn.style.display = 'none';
+        return;
+    }
+
+    if (filenameEl) filenameEl.textContent = doc.name || '';
+
+    if (ocrBtn) {
+        if (fn.isOcrEnabled() && doc.type === 'pdf') {
+            const ocrState = fn.getOcrState(url);
+            const wasPulsing = ocrBtn.classList.contains('ocr-pulsing');
+            ocrBtn.className = 'kw-ocr-btn' + (ocrState && ocrState.status === 'done' ? ' active' : ocrState && ocrState.status === 'processing' ? ' ocr-pulsing' : '');
+            if (ocrState && ocrState.status === 'processing' && !wasPulsing) syncOcrPulse();
+            ocrBtn.textContent = ocrState && ocrState.status === 'done' ? 'OCR\u2713' : 'OCR';
+            ocrBtn.title = 'Run OCR on this file';
+            ocrBtn.style.display = '';
+            ocrBtn.onclick = (e) => { e.stopPropagation(); fn.toggleOcrForFile(url); };
+        } else {
+            ocrBtn.style.display = 'none';
+        }
+    }
+
+    const keywords = window.KEYWORDS || [];
+    const cells = [];
+
+    keywords.forEach(k => {
+        const count = doc.counts[k] || 0;
+        if (count > 0) {
+            const isActive = k === state.activeKeyword;
+            const countText = (isActive && state.currentMatchIndex >= 0) 
+                ? `${state.currentMatchIndex + 1}/${count}` 
+                : count;
+            cells.push(`<div class="kw-grid-cell${isActive ? ' active' : ''}" data-keyword="${k}" data-count="${count}">
+                <span class="kw-cell-name">${k}</span>
+                <span class="kw-cell-count">${countText}</span>
+            </div>`);
+        }
+    });
+
+    if (cells.length === 0) {
+        content.innerHTML = '<div class="kw-grid-empty">No keyword matches</div>';
+    } else {
+        content.innerHTML = cells.join('');
+        content.querySelectorAll('.kw-grid-cell').forEach(cell => {
+            cell.addEventListener('click', () => {
+                const k = cell.dataset.keyword;
+                _closeMobileSidebar();
+                if (state.currentDocUrl === url) {
+                    if (doc?.type === 'pdf') _cycleSearch(k);
+                    else _cycleDocSearch(k);
+                } else {
+                    _loadDocument(url, k);
+                }
+            });
+        });
+    }
 }
 
 export function updateProgressMainThread() {
@@ -431,5 +341,8 @@ export function updateProgressMainThread() {
         dom.statusBar.textContent = state.totalMatchesFound === 0
             ? 'No matches found'
             : `${state.totalMatchesFound} matches across ${state.totalDocsFound} document${state.totalDocsFound !== 1 ? 's' : ''}`;
+        if (state.currentDocUrl) {
+            updateKeywordGrid(state.currentDocUrl);
+        }
     }
 }

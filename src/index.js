@@ -58,6 +58,7 @@ register('renderNoMatchCard', rendering.renderNoMatchCard);
 register('renderResultsArea', rendering.renderResultsArea);
 register('updateStats', rendering.updateStats);
 register('updateSidebarBadge', rendering.updateSidebarBadge);
+register('updateKeywordGrid', rendering.updateKeywordGrid);
 register('updateProgressMainThread', rendering.updateProgressMainThread);
 
 register('clearSearch', ui.clearSearch);

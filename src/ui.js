@@ -4,9 +4,7 @@ import { fn } from './cross.js';
 import * as ocr from './ocr.js';
 import * as measure from './measure.js';
 
-state.currentLayout = window.localStorage.getItem('pdf_layout') || 'cards';
 state.renderQuality = window.localStorage.getItem('pdf_render_quality') || 'medium';
-state.expandedTreeItems = new Set();
 state.smoothScrollEnabled = false;
 state.mobileSidebarOpen = false;
 state.settingsOpen = false;
@@ -60,7 +58,6 @@ export function clearAllResults() {
     state.totalDocsFound = 0;
     state.docDataCache = {};
     state.totalCacheSize = 0;
-    if (state.expandedTreeItems) state.expandedTreeItems.clear();
     fn.updateStats();
 
     state.pdfDoc = null;
@@ -388,58 +385,6 @@ export function toggleSettings(e) {
 
     menu.appendChild(animateBtn);
 
-    const ocrBtn = document.createElement('button');
-    ocrBtn.className = 'toggle-btn' + (ocr.isOcrEnabled() ? ' on' : '');
-    ocrBtn.style.cssText = btnStyle;
-    ocrBtn.title = 'Optical Character Recognition finds words in images';
-    ocrBtn.onclick = function() {
-        this.classList.toggle('on');
-        ocr.toggleOcrGlobal();
-        const st = this.querySelector('.toggle-state');
-        if (st) st.textContent = ocr.isOcrEnabled() ? 'ON' : 'OFF';
-    };
-    const ocrLabel = document.createElement('span');
-    ocrLabel.className = 'toggle-label';
-    ocrLabel.textContent = 'Enable OCR ';
-    ocrBtn.appendChild(ocrLabel);
-    const ocrState = document.createElement('span');
-    ocrState.className = 'toggle-state';
-    ocrState.textContent = ocr.isOcrEnabled() ? 'ON' : 'OFF';
-    ocrBtn.appendChild(ocrState);
-    menu.appendChild(ocrBtn);
-
-    const layoutSection = document.createElement('div');
-    layoutSection.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:4px;padding-top:8px;border-top:1px solid var(--grey-600)';
-
-    const layoutLabel = document.createElement('span');
-    layoutLabel.className = 'toggle-label';
-    layoutLabel.textContent = 'Sidebar Layout:';
-    layoutSection.appendChild(layoutLabel);
-
-    const layoutBtns = document.createElement('div');
-    layoutBtns.style.cssText = 'display:flex;gap:4px';
-
-    ['cards', 'tree'].forEach(l => {
-        const btn = document.createElement('button');
-        btn.textContent = l.charAt(0).toUpperCase() + l.slice(1);
-        btn.style.cssText = 'flex:1;padding:6px 8px;font-size:0.75rem;border:1px solid var(--grey-600);border-radius:4px;cursor:pointer;'
-            + 'background:' + (state.currentLayout === l ? 'var(--green)' : 'transparent') + ';'
-            + 'color:' + (state.currentLayout === l ? 'white' : 'var(--grey-300)');
-        btn.onclick = () => {
-            state.settingsJustToggled = true;
-            setLayout(l);
-            layoutBtns.querySelectorAll('button').forEach(b => {
-                const isSelected = b.textContent.toLowerCase() === l;
-                b.style.background = isSelected ? 'var(--green)' : 'transparent';
-                b.style.color = isSelected ? 'white' : 'var(--grey-300)';
-            });
-        };
-        layoutBtns.appendChild(btn);
-    });
-
-    layoutSection.appendChild(layoutBtns);
-    menu.appendChild(layoutSection);
-
     const qualitySection = document.createElement('div');
     qualitySection.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:4px;padding-top:8px;border-top:1px solid var(--grey-600)';
 
@@ -531,12 +476,6 @@ function toggleAnimate() {
     localStorage.setItem('pdf_smooth_scroll', state.smoothScrollEnabled);
     const label = document.querySelector('.toggle-state');
     if (label) label.textContent = state.smoothScrollEnabled ? 'ON' : 'OFF';
-}
-
-function setLayout(layout) {
-    state.currentLayout = layout;
-    localStorage.setItem('pdf_layout', layout);
-    fn.renderResultsArea();
 }
 
 export function closeMobileSidebar() {

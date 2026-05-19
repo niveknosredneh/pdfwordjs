@@ -39,8 +39,6 @@ export const state = {
     basePath: '',
     workerPool: null,
 
-    currentLayout: 'cards',
-    expandedTreeItems: new Set(),
     smoothScrollEnabled: false,
     mobileSidebarOpen: false,
     settingsOpen: false,

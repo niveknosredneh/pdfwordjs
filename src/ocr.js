@@ -3,7 +3,7 @@ import * as dom from './dom.js';
 import { fn } from './cross.js';
 import { getKeywordRegex } from './keyword-regex.js';
 
-let ocrEnabled = false;
+let ocrEnabled = true;
 const ocrFileState = new Map();
 let ocrWorker = null;
 let workerTaskId = 0;
@@ -26,8 +26,7 @@ export function getOcrMatchesForKeyword(keyword, url) {
 }
 
 export function initOcr() {
-    const saved = localStorage.getItem('pdf_ocr_enabled');
-    if (saved === 'true') ocrEnabled = true;
+    ocrEnabled = true;
 }
 
 export function toggleOcrGlobal() {

@@ -26,13 +26,6 @@ function loadPDF(fileUrl, keyword = '') {
         return;
     }
 
-    if (state.currentLayout === 'tree' && state.currentDocUrl && state.currentDocUrl !== fileUrl) {
-        state.expandedTreeItems.delete(state.currentDocUrl);
-    }
-    if (state.currentLayout === 'tree' && fileUrl) {
-        state.expandedTreeItems.add(fileUrl);
-    }
-
     state.currentDocUrl = fileUrl;
 
     if (state.pdfDoc) {
@@ -141,7 +134,7 @@ function loadPDF(fileUrl, keyword = '') {
             fn.renderPageHeatmaps();
             fn.refreshAllMeasurements();
 
-            if (state.currentLayout === 'tree') fn.renderResultsArea();
+            fn.renderResultsArea();
 
             if (keyword) fn.performSearch(keyword);
         } catch (err) {

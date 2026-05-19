@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kwpdf-d0aa2000';
+const CACHE_NAME = 'kwpdf-3c680b18';
 const NETWORK_FIRST = ['./bundle.js'];
 const LOCAL_ASSETS = [
     './index.html',

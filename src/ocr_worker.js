@@ -3,9 +3,22 @@ importScripts('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js
 let worker = null;
 let ready = false;
 const queue = [];
+let currentPageNum = 0;
+let currentCacheKey = '';
 
 async function init() {
-    worker = await Tesseract.createWorker('eng');
+    worker = await Tesseract.createWorker('eng', 1, {
+        logger: (m) => {
+            if (m.status === 'recognizing text') {
+                self.postMessage({
+                    type: 'ocr-progress',
+                    progress: m.progress,
+                    pageNum: currentPageNum,
+                    cacheKey: currentCacheKey
+                });
+            }
+        }
+    });
     ready = true;
     for (const msg of queue) processMessage(msg);
     queue.length = 0;
@@ -16,6 +29,8 @@ init();
 async function processMessage(e) {
     const { task, data } = e.data;
     if (task === 'ocr-page') {
+        currentPageNum = data.pageNum;
+        currentCacheKey = data.cacheKey;
         try {
             const result = await worker.recognize(data.imageData);
             self.postMessage({

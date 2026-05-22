@@ -79,12 +79,18 @@ function realWorldMm(pdfPts) {
     return pdfToMm(pdfPts) * scaleX;
 }
 
+function addCommas(n) {
+    const parts = n.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.join('.');
+}
+
 /** @param {number} totalMm */
 function formatLength(totalMm) {
     if (totalMm < 0) totalMm = 0;
     if (totalMm < 10) return Math.round(totalMm) + ' mm';
     if (totalMm < 1000) return (totalMm / 10).toFixed(1) + ' cm';
-    return (totalMm / 1000).toFixed(2) + ' m';
+    return addCommas((totalMm / 1000).toFixed(2)) + ' m';
 }
 
 /** @param {number} mm2 */
@@ -92,7 +98,7 @@ function formatArea(mm2) {
     if (mm2 < 0) mm2 = 0;
     if (mm2 < 100) return Math.round(mm2) + ' mm\xB2';
     if (mm2 < 10000) return (mm2 / 100).toFixed(1) + ' cm\xB2';
-    return (mm2 / 1000000).toFixed(2) + ' m\xB2';
+    return addCommas((mm2 / 1000000).toFixed(2)) + ' m\xB2';
 }
 
 /** @param {Array<{x:number, y:number}>} points */

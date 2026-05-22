@@ -203,6 +203,10 @@ export function deactivateTool() {
         isListening = false;
     }
     dom.viewerScroll.classList.remove('is-measuring');
+    ['measureDistBtn', 'measurePerimBtn', 'measureAreaBtn'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.remove('active-tool');
+    });
     renderAllMeasurements();
 }
 
@@ -306,6 +310,7 @@ function finalizeDistance() {
     activePage = null;
     saveMeasurements();
     renderAllMeasurements();
+    deactivateTool();
 }
 
 // ── perimeter ──

@@ -10,10 +10,9 @@ const WORKER_POOL_SIZE = typeof navigator !== 'undefined' ? Math.min(navigator.h
 const workerSlots = [];
 
 const OCR_SCALE = 1.0;
-const MAX_DIM = 1200;
-const MAX_DIM_RETRY = 600;
-const PAGE_TIMEOUT_MS = 300_000;
-const RETRY_TIMEOUT_MS = 600_000;
+const RESOLUTION_STEPS = [1200, 900, 600, 300, 150];
+const STEP_TIMEOUT_MS = 60_000;
+const RENDER_TIMEOUT_MS = 30_000;
 const HIGHLIGHT_PAD = 3;
 
 let ocrTotalPages = 0;
@@ -111,7 +110,7 @@ function initWorkerPool() {
     }
 }
 
-function runOcrOnImage(slot, blob, pageNum, cacheKey, imageWidth, imageHeight, timeoutMs = PAGE_TIMEOUT_MS) {
+function runOcrOnImage(slot, blob, pageNum, cacheKey, imageWidth, imageHeight, timeoutMs = STEP_TIMEOUT_MS) {
     return new Promise((resolve, reject) => {
         const id = cacheKey + ':' + pageNum;
         const timer = setTimeout(() => {
@@ -148,7 +147,15 @@ async function renderAndRecognize(page, pageNum, url, maxDim, timeoutMs, slot) {
 
     const canvas = new OffscreenCanvas(renderWidth, renderHeight);
     const ctx = canvas.getContext('2d');
-    await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: OCR_SCALE * scaleFactor }) }).promise;
+    const renderTask = page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: OCR_SCALE * scaleFactor }) });
+    renderTask.promise.catch(() => {});
+    await Promise.race([
+        renderTask.promise,
+        new Promise((_, reject) => setTimeout(() => {
+            renderTask.cancel();
+            reject(new Error('render timed out'));
+        }, RENDER_TIMEOUT_MS))
+    ]);
     const blob = await canvas.convertToBlob({ type: 'image/png' });
 
     const ocrResult = await runOcrOnImage(slot, blob, pageNum, url, pageWidth, pageHeight, timeoutMs);
@@ -163,19 +170,14 @@ async function renderAndRecognize(page, pageNum, url, maxDim, timeoutMs, slot) {
 
 async function processPageOnWorker(pdfDoc, pageNum, url, fileName, slot) {
     const page = await pdfDoc.getPage(pageNum);
-
-    try {
-        return await renderAndRecognize(page, pageNum, url, MAX_DIM, PAGE_TIMEOUT_MS, slot);
-    } catch (err) {
-        console.warn(`[OCR] Page ${pageNum} timed out, retrying at lower resolution:`, err.message);
+    for (const maxDim of RESOLUTION_STEPS) {
+        try {
+            return await renderAndRecognize(page, pageNum, url, maxDim, STEP_TIMEOUT_MS, slot);
+        } catch (err) {
+            console.warn(`[OCR] Page ${pageNum} failed at ${maxDim}px:`, err.message);
+        }
     }
-
-    try {
-        return await renderAndRecognize(page, pageNum, url, MAX_DIM_RETRY, RETRY_TIMEOUT_MS, slot);
-    } catch (err) {
-        console.error(`[OCR] Page ${pageNum} retry also failed:`, err.message);
-        return null;
-    }
+    return null;
 }
 
 async function startOcrForFile(url) {

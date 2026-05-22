@@ -113,6 +113,16 @@ function loadPDF(fileUrl, keyword = '') {
                 }
                 dom.loaderProgressFill.style.width = '80%';
                 await fn.precomputeAllSearches();
+
+                // Populate sidebar keyword counts from search results
+                const counts = {};
+                for (const [kw, matches] of Object.entries(state.searchCache)) {
+                    if (kw === '_deduplicated') continue;
+                    counts[kw] = matches.length;
+                }
+                if (state.docDataCache[fileUrl]) {
+                    state.docDataCache[fileUrl].counts = counts;
+                }
             }
 
             // Auto-detect measurement scale from embedded metadata or page text

@@ -286,6 +286,7 @@ export function cycleDocSearch(query) {
     dom.matchInput.value = state.docCurrentMatchIndex + 1;
     renderDocHighlights();
     fn.updateSidebarBadge();
+    goToDocMatch(state.docCurrentMatchIndex);
 }
 
 export function renderDocHighlights() {

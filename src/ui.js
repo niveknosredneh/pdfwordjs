@@ -696,10 +696,14 @@ export function setupEventListeners() {
         if (e.key === 'Enter') {
             const num = parseInt(dom.matchInput.value);
             if (num >= 1 && num <= state.searchResults.length) { goToMatch(num - 1); dom.matchInput.blur(); }
+            else if (num >= 1 && num <= state.docSearchResults.length) { fn.goToDocMatch(num - 1); dom.matchInput.blur(); }
         }
     });
 
-    dom.matchInput.addEventListener('blur', () => { dom.matchInput.value = state.currentMatchIndex + 1; });
+    dom.matchInput.addEventListener('blur', () => {
+        if (state.searchResults.length > 0) dom.matchInput.value = state.currentMatchIndex + 1;
+        else if (state.docSearchResults.length > 0) dom.matchInput.value = state.docCurrentMatchIndex + 1;
+    });
 
     dom.keywordSelect.addEventListener('change', () => {
         if (dom.keywordSelect.value) {

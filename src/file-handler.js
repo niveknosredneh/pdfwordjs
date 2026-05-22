@@ -233,6 +233,33 @@ async function processFiles(files) {
     const statusMsgs = dom.resultsArea.querySelectorAll('.status-msg');
     statusMsgs.forEach(el => el.remove());
 
+    if (files.length === 1) {
+        // ── Single file: render immediately, search async inside loadDocument ──
+        const file = files[0];
+        const sizeLimit = getFileType(file.name) === 'pdf' ? state.MAX_FILE_SIZE : state.MAX_DOC_FILE_SIZE;
+        if (file.size > sizeLimit) {
+            showFileError(file.name, 'Skipped (' + (file.size / 1024 / 1024).toFixed(1) + ' MB exceeds limit)');
+            return;
+        }
+
+        dom.progressBar.style.width = '0%';
+        state.processed = 0;
+        state.totalFiles = 1;
+
+        const url = URL.createObjectURL(file);
+        state.objectUrls.push(url);
+
+        fn.renderPlaceholderCard(file.name, url, file);
+
+        // Load & render immediately — text extraction + keyword search happen inside loadPDF/loadDocxDoc
+        fn.loadDocument(url);
+
+        state.processed = 1;
+        fn.updateStats();
+        return;
+    }
+
+    // ── Multiple files: existing batch behavior ──
     dom.progressBar.style.width = '0%';
 
     state.processed = 0;

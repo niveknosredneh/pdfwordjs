@@ -102,7 +102,7 @@ function formatArea(mm2) {
 }
 
 /** @param {Array<{x:number, y:number}>} points */
-function polygonArea(points) {
+function simplePolygonArea(points) {
     let sum = 0;
     for (let i = 0; i < points.length; i++) {
         const j = (i + 1) % points.length;
@@ -110,6 +110,59 @@ function polygonArea(points) {
         sum -= points[j].x * points[i].y;
     }
     return Math.abs(sum) / 2;
+}
+
+/** @param {{x:number, y:number, page?:number}} p1 @param {{x:number, y:number, page?:number}} p2 @param {{x:number, y:number, page?:number}} p3 @param {{x:number, y:number, page?:number}} p4 */
+function getIntersection(p1, p2, p3, p4) {
+    const denom = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
+    if (Math.abs(denom) < Number.EPSILON) return null;
+
+    const t = ((p1.x - p3.x) * (p3.y - p4.y) - (p1.y - p3.y) * (p3.x - p4.x)) / denom;
+    const u = -((p1.x - p2.x) * (p1.y - p3.y) - (p1.y - p2.y) * (p1.x - p3.x)) / denom;
+
+    if (t > 0.00001 && t < 0.99999 && u > 0.00001 && u < 0.99999) {
+        return {
+            page: p1.page,
+            x: p1.x + t * (p2.x - p1.x),
+            y: p1.y + t * (p2.y - p1.y)
+        };
+    }
+    return null;
+}
+
+/** @param {Array<{page?:number, x:number, y:number}>} points */
+function decomposePolygon(points) {
+    if (points.length < 3) return [];
+
+    for (let i = 0; i < points.length; i++) {
+        const next_i = (i + 1) % points.length;
+        const p1 = points[i], p2 = points[next_i];
+
+        for (let j = i + 2; j < points.length; j++) {
+            if (i === 0 && j === points.length - 1) continue;
+
+            const next_j = (j + 1) % points.length;
+            const p3 = points[j], p4 = points[next_j];
+
+            const intersection = getIntersection(p1, p2, p3, p4);
+
+            if (intersection) {
+                const polyA = [intersection];
+                for (let k = next_i; k !== next_j; k = (k + 1) % points.length) {
+                    polyA.push(points[k]);
+                }
+
+                const polyB = [intersection];
+                for (let k = next_j; k !== next_i; k = (k + 1) % points.length) {
+                    polyB.push(points[k]);
+                }
+
+                return [...decomposePolygon(polyA), ...decomposePolygon(polyB)];
+            }
+        }
+    }
+
+    return [points];
 }
 
 /** @param {{x:number, y:number}} p1 @param {{x:number, y:number}} p2 */
@@ -367,21 +420,27 @@ function finalizeArea() {
     if (!url || pendingPoints.length < 3) return;
     if (!measurementsByDoc[url]) measurementsByDoc[url] = [];
 
-    const pdfArea = polygonArea(pendingPoints);
-    const realMm2 = pdfArea / (POINTS_PER_MM * POINTS_PER_MM) * scaleX * scaleX;
+    const subPolygons = decomposePolygon(pendingPoints);
 
-    const pdfPerim = polylineLength(pendingPoints, true);
-    const realPerimMm = realWorldMm(pdfPerim);
+    for (const poly of subPolygons) {
+        if (poly.length < 3) continue;
 
-    const label = 'Area: ' + formatArea(realMm2) + '\nPerim: ' + formatLength(realPerimMm) + ' @ 1:' + scaleX;
+        const pdfArea = simplePolygonArea(poly);
+        const realMm2 = pdfArea / (POINTS_PER_MM * POINTS_PER_MM) * scaleX * scaleX;
 
-    measurementsByDoc[url].push({
-        id: generateId(),
-        type: 'area',
-        points: pendingPoints.slice(),
-        label,
-        areaMm2: realMm2
-    });
+        const pdfPerim = polylineLength(poly, true);
+        const realPerimMm = realWorldMm(pdfPerim);
+
+        const label = 'Area: ' + formatArea(realMm2) + '\nPerim: ' + formatLength(realPerimMm) + ' @ 1:' + scaleX;
+
+        measurementsByDoc[url].push({
+            id: generateId(),
+            type: 'area',
+            points: poly,
+            label,
+            areaMm2: realMm2
+        });
+    }
 
     pendingPoints = [];
     previewLine = null;
@@ -763,20 +822,30 @@ function renderPreviewLine() {
             drawGhostSegment(layer, mouse, first, s);
 
             const allPoints = [...pendingPoints, mouse];
-            const totalPdf = polylineLength(allPoints, false);
-            addGhostLabel(layer, (last.x + mouse.x) / 2 * s + 10, (last.y + mouse.y) / 2 * s - 10, 'Perim: ' + formatLength(realWorldMm(totalPdf)));
-
             if (allPoints.length >= 3) {
-                const fill = document.createElement('div');
-                fill.className = 'measure-fill-ghost';
-                fill.style.clipPath = 'polygon(' + allPoints.map(p => (p.x * s) + 'px ' + (p.y * s) + 'px').join(', ') + ')';
-                layer.appendChild(fill);
+                const subPolys = decomposePolygon(allPoints);
+                let totalAreaMm2 = 0;
+                for (const poly of subPolys) {
+                    if (poly.length < 3) continue;
+                    const fill = document.createElement('div');
+                    fill.className = 'measure-fill-ghost';
+                    fill.style.clipPath = 'polygon(' + poly.map(p => (p.x * s) + 'px ' + (p.y * s) + 'px').join(', ') + ')';
+                    layer.appendChild(fill);
 
-                const pdfArea = polygonArea(allPoints);
-                const realMm2 = pdfArea / (POINTS_PER_MM * POINTS_PER_MM) * scaleX * scaleX;
-                const cx = allPoints.reduce((sum, p) => sum + p.x, 0) / allPoints.length;
-                const cy = allPoints.reduce((sum, p) => sum + p.y, 0) / allPoints.length;
-                addGhostLabel(layer, (cx + 6) * s, (cy - 10) * s, 'Area: ' + formatArea(realMm2));
+                    const pdfArea = simplePolygonArea(poly);
+                    const realMm2 = pdfArea / (POINTS_PER_MM * POINTS_PER_MM) * scaleX * scaleX;
+                    totalAreaMm2 += realMm2;
+                    const pdfPerim = polylineLength(poly, true);
+                    const realPerimMm = realWorldMm(pdfPerim);
+                    const cx = poly.reduce((sum, p) => sum + p.x, 0) / poly.length;
+                    const cy = poly.reduce((sum, p) => sum + p.y, 0) / poly.length;
+                    addGhostLabel(layer, (cx + 6) * s, (cy - 10) * s, 'Area: ' + formatArea(realMm2) + '\nPerim: ' + formatLength(realPerimMm));
+                }
+                if (subPolys.length > 1) {
+                    const cx = allPoints.reduce((sum, p) => sum + p.x, 0) / allPoints.length;
+                    const cy = allPoints.reduce((sum, p) => sum + p.y, 0) / allPoints.length;
+                    addGhostLabel(layer, (cx + 6) * s, (cy + 20) * s, 'Total area: ' + formatArea(totalAreaMm2));
+                }
             }
         } else {
             const real = realWorldMm(distanceBetween(last, mouse));
@@ -805,7 +874,7 @@ function addGhostLabel(layer, x, y, text) {
     lbl.className = 'measure-label-ghost';
     lbl.style.left = (x + 6) + 'px';
     lbl.style.top = (y - 10) + 'px';
-    lbl.textContent = text;
+    lbl.innerHTML = text.replace(/\n/g, '<br>');
     layer.appendChild(lbl);
 }
 

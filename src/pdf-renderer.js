@@ -218,9 +218,32 @@ export async function renderPageNow(pageNum, forceScale = null) {
             page.getTextContent().then(textContent => {
                 let pageText = '';
                 const textItems = [];
+                let prevItem = null;
                 for (const item of textContent.items) {
+                    if (prevItem) {
+                        const fontSize = Math.abs(item.transform[0]) || 12;
+                        const gapX = item.transform[4] - (prevItem.transform[4] + prevItem.width);
+                        const gapY = Math.abs(item.transform[5] - prevItem.transform[5]);
+                        const sameLine = gapY <= fontSize * 0.5;
+                        if (sameLine) {
+                            if (gapX > 0) {
+                                pageText += ' ';
+                                textItems.push({ text: ' ', transform: item.transform, width: 0, height: item.height });
+                            }
+                        } else {
+                            const hyphenBreak = /-\s*$/.test(prevItem.str) && /^\w/.test(item.str);
+                            if (hyphenBreak) {
+                                pageText = pageText.slice(0, -1);
+                                if (textItems.length > 0) textItems[textItems.length - 1].text = textItems[textItems.length - 1].text.slice(0, -1);
+                            } else {
+                                pageText += ' ';
+                                textItems.push({ text: ' ', transform: item.transform, width: 0, height: item.height });
+                            }
+                        }
+                    }
                     pageText += item.str;
                     textItems.push({ text: item.str, transform: item.transform, width: item.width, height: item.height });
+                    prevItem = item;
                 }
                 state.textPageCache[pageNum] = { text: pageText, viewport: vp1, items: textItems };
                 state.pageHeights[pageNum] = vp1.height;

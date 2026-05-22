@@ -785,6 +785,7 @@ export function setupEventListeners() {
         };
         scaleInput.addEventListener('change', updateScale);
         scaleInput.addEventListener('blur', updateScale);
+        scaleInput.addEventListener('focus', () => { scaleInput.value = ''; });
         scaleInput.value = '1:' + measure.getScale();
     }
 

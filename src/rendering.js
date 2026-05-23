@@ -250,7 +250,7 @@ function renderTree(node, path = '') {
 
                 function tryActivateAndRender() {
                     const isDocReady = doc.type === 'pdf'
-                        ? !!(state.pdfDoc && state.currentDocUrl === doc.url && state.textPageCache[1])
+                        ? !!(state.pdfDoc && state.currentDocUrl === doc.url && state._gsPageCacheReady)
                         : !!state.docContentCache[doc.url];
                     if (isDocReady) {
                         state.globalSearchActiveDoc = doc.url;

@@ -49,6 +49,7 @@ function loadPDF(fileUrl, keyword = '') {
     document.documentElement.style.setProperty('--pdf-scale', '1');
     state.currentPage = 1;
     state.textPageCache = {};
+    state._gsPageCacheReady = false;
 
     (async () => {
         try {
@@ -111,6 +112,7 @@ function loadPDF(fileUrl, keyword = '') {
                 for (let i = 0; i < cached.pages.length; i++) {
                     state.textPageCache[i + 1] = cached.pages[i];
                 }
+                state._gsPageCacheReady = true;
                 dom.loaderProgressFill.style.width = '80%';
                 await fn.precomputeAllSearches();
 

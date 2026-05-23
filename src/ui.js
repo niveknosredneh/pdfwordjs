@@ -20,7 +20,6 @@ export function clearSearch() {
     state.globalSearchActiveDoc = '';
     state.globalSearchDocResults = [];
     state.globalSearchDocIndex = 0;
-    state._gsPos = -1;
     state.activeKeyword = '';
     state.searchResults = [];
     state.searchResultsByPage = {};
@@ -46,6 +45,7 @@ export function clearAllResults() {
         state.globalSearchDocResults = [];
         state.globalSearchDocIndex = 0;
         state._gsPos = -1;
+        _gsPendingUrl = null;
     }
 
     const viewerDropMsg = document.getElementById('viewerDropMsg');
@@ -88,6 +88,7 @@ export function clearAllResults() {
     state.searchCache = {};
     clearSearch();
     state.textPageCache = {};
+    state._gsPageCacheReady = false;
     state.docSearchResults = [];
     state.docCurrentMatchIndex = -1;
     state._docPageHtmls = null;
@@ -894,8 +895,11 @@ state.pageObserver = null;
 // ── Global search across all loaded files ──
 
 let globalSearchTimer = null;
+let globalSearchChunkId = 0;
+let _gsPendingUrl = null;
+const GS_CHUNK_SIZE = 20;
 
-export function activateGlobalSearch() {
+export function activateGlobalSearch(navigateToLast) {
     const query = state.globalSearchQuery;
     if (!query) return;
 
@@ -903,6 +907,10 @@ export function activateGlobalSearch() {
         fn.performDocSearch(query);
         state.globalSearchDocResults = state.docSearchResults;
         state.globalSearchDocIndex = state.docCurrentMatchIndex;
+        if (navigateToLast && state.docSearchResults.length > 0) {
+            fn.goToDocMatch(state.docSearchResults.length - 1);
+            state.globalSearchDocIndex = state.docCurrentMatchIndex;
+        }
         return;
     }
 
@@ -929,7 +937,12 @@ export function activateGlobalSearch() {
     state.globalSearchDocIndex = 0;
 
     if (results.length > 0) {
-        customGoToMatch(0);
+        if (navigateToLast) {
+            customGoToMatch(results.length - 1);
+            state.globalSearchDocIndex = customSearchIndex;
+        } else {
+            customGoToMatch(0);
+        }
     } else {
         clearCustomHighlights();
     }
@@ -969,6 +982,9 @@ function _gsNavigate(dir) {
     if (!state.globalSearchQuery) return;
     if (globalSearchTimer) clearTimeout(globalSearchTimer);
 
+    // Still waiting for a previous file jump to complete
+    if (_gsPendingUrl) return;
+
     const docUrls = Object.keys(state.globalSearchResults)
         .filter(url => state.globalSearchResults[url] > 0)
         .sort((a, b) => {
@@ -1001,7 +1017,7 @@ function _gsNavigate(dir) {
     } else {
         state._gsPos = ((state._gsPos + dir) % docUrls.length + docUrls.length) % docUrls.length;
     }
-    _gsJumpToDoc(docUrls[state._gsPos]);
+    _gsJumpToDoc(docUrls[state._gsPos], dir < 0);
 }
 
 export function performGlobalSearch(query) {
@@ -1009,6 +1025,8 @@ export function performGlobalSearch(query) {
         clearTimeout(globalSearchTimer);
         globalSearchTimer = null;
     }
+    globalSearchChunkId++;
+    _gsPendingUrl = null;
 
     const trimmed = query.trim();
     if (!trimmed) {
@@ -1025,61 +1043,84 @@ export function performGlobalSearch(query) {
     state.globalSearchDocIndex = 0;
     state._gsPos = -1;
 
-    dom.statusBar.textContent = `Searching ${Object.keys(state.docDataCache).length} file${Object.keys(state.docDataCache).length !== 1 ? 's' : ''} for "${trimmed}"...`;
+    const totalFiles = Object.keys(state.docDataCache).length;
+    dom.statusBar.textContent = `Searching ${totalFiles} file${totalFiles !== 1 ? 's' : ''} for "${trimmed}"...`;
 
     const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(escaped, 'gi');
     const results = {};
     let totalMatches = 0;
     let filesWithMatches = 0;
+    const entries = Object.entries(state.docDataCache);
+    let idx = 0;
+    const chunkId = globalSearchChunkId;
 
-    for (const [url, doc] of Object.entries(state.docDataCache)) {
-        let text = '';
+    function processChunk() {
+        if (globalSearchChunkId !== chunkId) return;
 
-        if ((doc.type === 'docx' || doc.type === 'doc') && state.docContentCache[url]) {
-            text = state.docContentCache[url].text || '';
-        } else if (doc.type === 'pdf' && state.docTextCache[url]) {
-            const cached = state.docTextCache[url];
-            if (cached.pages) {
-                for (const page of cached.pages) {
-                    text += page.text + ' ';
+        const end = Math.min(idx + GS_CHUNK_SIZE, entries.length);
+        for (; idx < end; idx++) {
+            const [url, doc] = entries[idx];
+            let text = '';
+
+            if ((doc.type === 'docx' || doc.type === 'doc') && state.docContentCache[url]) {
+                text = state.docContentCache[url].text || '';
+            } else if (doc.type === 'pdf' && state.docTextCache[url]) {
+                const cached = state.docTextCache[url];
+                if (cached.pages) {
+                    for (const page of cached.pages) {
+                        text += page.text + ' ';
+                    }
+                }
+            }
+
+            if (text) {
+                regex.lastIndex = 0;
+                let count = 0;
+                let m;
+                while ((m = regex.exec(text)) !== null) count++;
+                if (count > 0) {
+                    results[url] = count;
+                    totalMatches += count;
+                    filesWithMatches++;
                 }
             }
         }
 
-        if (text) {
-            regex.lastIndex = 0;
-            let count = 0;
-            let m;
-            while ((m = regex.exec(text)) !== null) count++;
-            if (count > 0) {
-                results[url] = count;
-                totalMatches += count;
-                filesWithMatches++;
+        if (idx < entries.length) {
+            requestAnimationFrame(processChunk);
+        } else {
+            state.globalSearchResults = results;
+
+            if (totalMatches > 0) {
+                dom.statusBar.textContent = `${totalMatches} global match${totalMatches !== 1 ? 'es' : ''} for "${trimmed}" in ${filesWithMatches} file${filesWithMatches !== 1 ? 's' : ''}`;
+            } else {
+                dom.statusBar.textContent = `No matches for "${trimmed}"`;
             }
+
+            fn.renderResultsArea();
         }
     }
 
-    state.globalSearchResults = results;
-
-    if (totalMatches > 0) {
-        dom.statusBar.textContent = `${totalMatches} global match${totalMatches !== 1 ? 'es' : ''} for "${trimmed}" in ${filesWithMatches} file${filesWithMatches !== 1 ? 's' : ''}`;
-    } else {
-        dom.statusBar.textContent = `No matches for "${trimmed}"`;
-    }
-
-    fn.renderResultsArea();
+    requestAnimationFrame(processChunk);
 }
 
-function _gsJumpToDoc(url) {
+function _gsJumpToDoc(url, navigateToLast) {
+    _gsPendingUrl = url;
+    const requestedUrl = url;
     const poll = () => {
+        if (state.currentDocUrl !== requestedUrl) {
+            if (_gsPendingUrl === requestedUrl) _gsPendingUrl = null;
+            return;
+        }
         const doc = state.docDataCache[url];
         const isReady = doc?.type === 'pdf'
-            ? !!(state.pdfDoc && state.currentDocUrl === url && state.textPageCache[1])
+            ? !!(state.pdfDoc && state.currentDocUrl === url && state._gsPageCacheReady)
             : !!state.docContentCache[url];
         if (isReady) {
+            _gsPendingUrl = null;
             state.globalSearchActiveDoc = url;
-            activateGlobalSearch();
+            activateGlobalSearch(navigateToLast);
             fn.renderResultsArea();
         } else {
             setTimeout(poll, 200);
@@ -1097,7 +1138,7 @@ function initGlobalSearch() {
         if (globalSearchTimer) clearTimeout(globalSearchTimer);
         globalSearchTimer = setTimeout(() => {
             performGlobalSearch(dom.globalSearchInput.value);
-        }, 250);
+        }, 500);
     });
 
     dom.globalSearchInput.addEventListener('keydown', (e) => {

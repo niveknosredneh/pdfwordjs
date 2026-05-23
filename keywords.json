@@ -1,5 +1,6 @@
 {
   "defaultList": "Central Supply-Only",
+  "builtIn": ["Central Supply-Only", "Construction - Geomembrane"],
   "lists": {
     "Central Supply-Only": [
       "geotextile",

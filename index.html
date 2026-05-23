@@ -21,22 +21,19 @@
 <div id="sidebar" class="sidebar">
     <div class="header">
         <div class="header-main-row">
+            <button class="btn-icon btn-icon-danger" onclick="clearAllResults()" title="Clear all">&#10005;</button>
+            <button class="btn-icon" id="settingsBtn" onclick="toggleSettings()" title="Settings">&#9881;</button>
             <label class="btn-open">
                 <svg class="btn-open-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
                 Open Folder
                 <input type="file" id="folderInput" webkitdirectory directory multiple accept=".pdf,.docx,.doc" style="display:none">
             </label>
-            <div class="toolbar-section">
-                <button class="btn-icon" id="settingsBtn" onclick="toggleSettings()" title="Settings">&#9881;</button>
-                <button class="btn-icon btn-icon-danger" onclick="clearAllResults()" title="Clear all">&#10005;</button>
-            </div>
             <button class="mobile-toggle-sidebar" onclick="toggleMobileSidebar()" title="Toggle sidebar" style="display:none;">☰</button>
         </div>
         <div class="toolbar-section keyword-row">
             <span class="progress-svg-wrap"></span>
             <select class="list-select" id="keywordListSelect" title="Keyword list"></select>
         </div>
-        <div class="status-bar" id="statusBar"></div>
         <div class="sidebar-search">
             <div class="sidebar-search-row">
                 <input type="text" id="globalSearchInput" class="global-search-input" placeholder="Search all files..." autocomplete="off">
@@ -44,6 +41,7 @@
                 <button class="btn-icon gs-nav-btn" id="gsNextBtn" title="Next match">&#8594;</button>
             </div>
         </div>
+        <div class="status-bar" id="statusBar"></div>
     </div>
 
     

@@ -390,54 +390,80 @@ body {
 .sidebar-search-row {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 0;
     width: 100%;
+    background: var(--grey-700);
+    border: 1px solid var(--grey-600);
+    border-radius: 4px;
+    transition: border-color 0.2s, background 0.2s;
+}
+.sidebar-search-row:focus-within {
+    border-color: var(--green);
+    background: var(--grey-600);
 }
 .global-search-input {
     flex: 1;
-    background: var(--grey-700);
-    border: 1px solid var(--grey-600);
+    background: none;
+    border: none;
     color: var(--grey-200);
-    border-radius: 4px;
     padding: 5px 8px;
     font-size: 0.85rem;
     outline: none;
-    transition: border-color 0.2s, background 0.2s;
     box-sizing: border-box;
     min-width: 0;
-}
-.global-search-input:focus {
-    border-color: var(--green);
-    background: var(--grey-600);
 }
 .global-search-input::placeholder {
     color: var(--grey-400);
     opacity: 0.8;
 }
+.global-search-input:placeholder-shown {
+    text-align: center;
+}
+.global-search-input:not(:placeholder-shown) {
+    text-align: left;
+}
 .gs-nav-btn {
-    padding: 5px 8px;
+    background: none;
+    border: none;
+    color: var(--grey-300);
+    padding: 5px 7px;
     font-size: 0.85rem;
     line-height: 1;
     flex-shrink: 0;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: color 0.2s, background 0.2s;
 }
-[data-theme="light"] .global-search-input {
-    background: var(--grey-200);
-    border-color: var(--grey-300);
-    color: var(--grey-700);
+.gs-nav-btn:first-of-type {
+    border-left: 1px solid var(--grey-600);
 }
-[data-theme="light"] .global-search-input:focus {
-    background: var(--grey-100);
+.gs-nav-btn:hover {
+    color: var(--grey-200);
+    background: rgba(255,255,255,0.08);
+}
+[data-theme="light"] .sidebar-search-row {
+    background: rgba(0,0,0,0.06);
+    border-color: rgba(0,0,0,0.15);
+}
+[data-theme="light"] .sidebar-search-row:focus-within {
+    background: rgba(0,0,0,0.1);
     border-color: var(--green);
 }
+[data-theme="light"] .global-search-input {
+    color: #333;
+}
 [data-theme="light"] .global-search-input::placeholder {
-    color: var(--grey-400);
+    color: #999;
 }
 [data-theme="light"] .gs-nav-btn {
-    color: #666;
+    color: #555;
+}
+[data-theme="light"] .gs-nav-btn:first-of-type {
+    border-left-color: rgba(0,0,0,0.15);
 }
 [data-theme="light"] .gs-nav-btn:hover {
-    background: rgba(0,0,0,0.08);
     color: #222;
+    background: rgba(0,0,0,0.06);
 }
 
 .btn-icon {

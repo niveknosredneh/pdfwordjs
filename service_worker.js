@@ -1,10 +1,8 @@
 const CACHE_NAME = 'kwpdf-__CACHE_VERSION__';
-const NETWORK_FIRST = ['./bundle.js'];
+const NETWORK_FIRST = ['./index.html', './style.css', './bundle.js'];
 const LOCAL_ASSETS = [
-    './index.html',
     './bundle.js',
     './pdf.worker.min.js',
-    './style.css',
     './keywords.json',
     './manifest.json',
     './icons/favicon.ico',

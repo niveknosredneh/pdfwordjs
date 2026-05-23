@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import * as dom from './dom.js';
 import { fn } from './cross.js';
+import { processTextContent } from './pdf-search.js';
 
 state.pageHeights = {};
 state.renderedPages = new Set();
@@ -216,36 +217,12 @@ export async function renderPageNow(pageNum, forceScale = null) {
 
         if (!state.textPageCache[pageNum]) {
             page.getTextContent().then(textContent => {
-                let pageText = '';
-                const textItems = [];
-                let prevItem = null;
-                for (const item of textContent.items) {
-                    if (prevItem) {
-                        const fontSize = Math.abs(item.transform[0]) || 12;
-                        const gapX = item.transform[4] - (prevItem.transform[4] + prevItem.width);
-                        const gapY = Math.abs(item.transform[5] - prevItem.transform[5]);
-                        const sameLine = gapY <= fontSize * 0.5;
-                        if (sameLine) {
-                            if (gapX > 0) {
-                                pageText += ' ';
-                                textItems.push({ text: ' ', transform: item.transform, width: 0, height: item.height });
-                            }
-                        } else {
-                            const hyphenBreak = /-\s*$/.test(prevItem.str) && /^\w/.test(item.str);
-                            if (hyphenBreak) {
-                                pageText = pageText.slice(0, -1);
-                                if (textItems.length > 0) textItems[textItems.length - 1].text = textItems[textItems.length - 1].text.slice(0, -1);
-                            } else {
-                                pageText += ' ';
-                                textItems.push({ text: ' ', transform: item.transform, width: 0, height: item.height });
-                            }
-                        }
-                    }
-                    pageText += item.str;
-                    textItems.push({ text: item.str, transform: item.transform, width: item.width, height: item.height });
-                    prevItem = item;
-                }
-                state.textPageCache[pageNum] = { text: pageText, viewport: vp1, items: textItems };
+                const { text, items } = processTextContent(textContent);
+                state.textPageCache[pageNum] = {
+                    text,
+                    viewport: { width: vp1.width, height: vp1.height, offsetX: vp1.offsetX, offsetY: vp1.offsetY },
+                    items
+                };
                 state.pageHeights[pageNum] = vp1.height;
             }).catch(() => {});
         }
@@ -287,6 +264,8 @@ function buildTextLayer(el, pageNum, renderScale, displayHeight) {
     const textContent = state.textPageCache[pageNum];
     if (!textContent || !textContent.items) return;
 
+    const offsetY = (textContent.viewport && textContent.viewport.offsetY) || 0;
+
     const fragment = document.createDocumentFragment();
     for (const item of textContent.items) {
         const span = document.createElement('span');
@@ -295,7 +274,9 @@ function buildTextLayer(el, pageNum, renderScale, displayHeight) {
         const x = t[4] * renderScale;
         const y = t[5] * renderScale;
         const fontSize = Math.sqrt(t[0] * t[0] + t[1] * t[1]) * renderScale;
-        span.style.cssText = 'position:absolute;left:' + x + 'px;top:' + (displayHeight - y - fontSize) + 'px;font-size:' + fontSize + 'px;font-family:sans-serif;white-space:pre;color:transparent';
+        const itemH = (item.height || fontSize) * renderScale;
+        const top = (displayHeight + offsetY * renderScale) - y - itemH;
+        span.style.cssText = 'position:absolute;left:' + x + 'px;top:' + top + 'px;font-size:' + fontSize + 'px;font-family:sans-serif;white-space:pre;color:transparent';
         fragment.appendChild(span);
     }
     const textLayer = document.createElement('div');

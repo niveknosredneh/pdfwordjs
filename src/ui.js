@@ -247,6 +247,7 @@ function getTextCoords(cached, startIndex, endIndex) {
     if (!cached || !cached.items) return null;
 
     const viewHeight = cached.viewport.height;
+    const offsetY = cached.viewport.offsetY || 0;
     let startY = 0, startX = 0, endY = 0, endX = 0, height = 0;
     let charOffset = 0;
 
@@ -257,14 +258,14 @@ function getTextCoords(cached, startIndex, endIndex) {
         if (startIndex >= itemStart && startIndex < itemEnd) {
             const frac = (startIndex - itemStart) / item.text.length;
             startX = item.transform[4] + frac * item.width;
-            startY = viewHeight - (item.transform[5] + item.height);
+            startY = (viewHeight + offsetY) - (item.transform[5] + item.height);
             height = item.height;
         }
 
         if (endIndex > itemStart && endIndex <= itemEnd) {
             const frac = (endIndex - itemStart) / item.text.length;
             endX = item.transform[4] + frac * item.width;
-            endY = viewHeight - (item.transform[5] + item.height);
+            endY = (viewHeight + offsetY) - (item.transform[5] + item.height);
             break;
         }
 

@@ -3,6 +3,7 @@ import * as dom from './dom.js';
 import { fn } from './cross.js';
 import { evictCaches } from './file-handler.js';
 import { setScale, autoDetectScale } from './measure.js';
+import { processTextContent } from './pdf-search.js';
 
 function getDocTypeFromUrl(url) {
     const dataCached = state.docDataCache[url];
@@ -85,13 +86,12 @@ function loadPDF(fileUrl, keyword = '') {
                 const allResults = await Promise.all(extractPromises);
                 for (const { pageNum, content, viewport } of allResults) {
                     if (!content) continue;
-                    let pageText = '';
-                    const textItems = [];
-                    for (const item of content.items) {
-                        pageText += item.str;
-                        textItems.push({ text: item.str, transform: item.transform, width: item.width, height: item.height });
-                    }
-                    pageTextData.push({ text: pageText, viewport: { width: viewport.width, height: viewport.height }, items: textItems });
+                    const { text, items } = processTextContent(content);
+                    pageTextData.push({
+                        text,
+                        viewport: { width: viewport.width, height: viewport.height, offsetX: viewport.offsetX, offsetY: viewport.offsetY },
+                        items
+                    });
                 }
                 dom.loaderProgressFill.style.width = '80%';
                 const fileName = state.docDataCache[fileUrl]?.name || 'Document';

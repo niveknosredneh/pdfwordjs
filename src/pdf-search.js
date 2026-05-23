@@ -8,6 +8,39 @@ state.currentMatchIndex = -1;
 state.searchCache = {};
 state.textPageCache = {};
 
+export function processTextContent(textContent) {
+    let pageText = '';
+    const items = [];
+    let prevItem = null;
+    for (const item of textContent.items) {
+        if (prevItem) {
+            const fontSize = Math.abs(item.transform[0]) || 12;
+            const gapX = item.transform[4] - (prevItem.transform[4] + prevItem.width);
+            const gapY = Math.abs(item.transform[5] - prevItem.transform[5]);
+            const sameLine = gapY <= fontSize * 0.5;
+            if (sameLine) {
+                if (gapX > 0) {
+                    pageText += ' ';
+                    items.push({ text: ' ', transform: item.transform, width: 0, height: item.height });
+                }
+            } else {
+                const hyphenBreak = /-\s*$/.test(prevItem.str) && /^\w/.test(item.str);
+                if (hyphenBreak) {
+                    pageText = pageText.slice(0, -1);
+                    if (items.length > 0) items[items.length - 1].text = items[items.length - 1].text.slice(0, -1);
+                } else {
+                    pageText += ' ';
+                    items.push({ text: ' ', transform: item.transform, width: 0, height: item.height });
+                }
+            }
+        }
+        pageText += item.str;
+        items.push({ text: item.str, transform: item.transform, width: item.width, height: item.height });
+        prevItem = item;
+    }
+    return { text: pageText, items };
+}
+
 function buildOffsetMap(textItems) {
     const offsets = [];
     let acc = 0;
@@ -46,7 +79,8 @@ function computeMatchCoords(matchStart, matchEnd, viewport, textItems, offsetMap
     const startCharFrac = start.item.text.length > 0
         ? (matchStart - start.charStart) / start.item.text.length : 0;
     const sx = start.item.transform[4] + startCharFrac * start.item.width;
-    const sy = viewport.height - (start.item.transform[5] + start.item.height);
+    const offsetY = viewport.offsetY || 0;
+    const sy = (viewport.height + offsetY) - (start.item.transform[5] + start.item.height);
 
     const endCharFrac = end.item.text.length > 0
         ? (matchEnd - end.charStart) / end.item.text.length : 1;
@@ -133,10 +167,7 @@ export async function fetchPageItems(pageNum) {
     try {
         const page = await state.pdfDoc.getPage(pageNum);
         const content = await page.getTextContent();
-        const items = [];
-        for (const item of content.items) {
-            items.push({ text: item.str, transform: item.transform, width: item.width, height: item.height });
-        }
+        const { items } = processTextContent(content);
         cached.items = items;
         return items;
     } catch (err) {

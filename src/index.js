@@ -24,6 +24,7 @@ import * as ui from './ui.js';
 import * as keywords from './keywords.js';
 import * as ocr from './ocr.js';
 import * as measure from './measure.js';
+import { clearDivisions, initRibbon } from './pdf-divisions.js';
 
 register('setupVirtualPages', pdfRenderer.setupVirtualPages);
 register('isPageRendered', pdfRenderer.isPageRendered);
@@ -74,7 +75,8 @@ register('findNext', ui.findNext);
 register('findPrev', ui.findPrev);
 register('goToMatch', ui.goToMatch);
 register('toggleSettings', ui.toggleSettings);
-register('clearAllResults', ui.clearAllResults);
+register('clearAllResults', () => { ui.clearAllResults(); clearDivisions(); });
+register('clearDivisions', clearDivisions);
 
 register('populateKeywordSelect', keywords.populateKeywordSelect);
 
@@ -285,4 +287,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     keywords.populateListSelector();
     keywords.syncKeywordsToWindow();
     ui.setupEventListeners();
+    initRibbon();
 });

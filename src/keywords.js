@@ -4,9 +4,9 @@ import { clearKeywordRegexCache, getKeywordRegex } from './keyword-regex.js';
 
 let DEFAULT_LIST_NAME = 'Central Supply-Only';
 let KEYWORD_LISTS = {};
+let BUILT_IN_LISTS = [];
 let currentListName = DEFAULT_LIST_NAME;
 let KEYWORDS = [];
-const DEFAULT_LISTS = ['Central Supply-Only', 'Liners', 'Companies'];
 
 export function getKeywords() {
     return KEYWORDS;
@@ -31,6 +31,7 @@ export async function loadKeywords() {
 
         KEYWORD_LISTS = data.lists || {};
         DEFAULT_LIST_NAME = data.defaultList || 'Central Supply-Only';
+        BUILT_IN_LISTS = data.builtIn || [];
 
         loadCustomLists();
 
@@ -59,7 +60,7 @@ function saveCustomLists() {
     const custom = {};
 
     for (const name of Object.keys(KEYWORD_LISTS)) {
-        if (!DEFAULT_LISTS.includes(name)) {
+        if (!BUILT_IN_LISTS.includes(name)) {
             custom[name] = KEYWORD_LISTS[name];
         }
     }
@@ -67,7 +68,7 @@ function saveCustomLists() {
 }
 
 export function isCustomList(name) {
-    return !DEFAULT_LISTS.includes(name);
+    return !BUILT_IN_LISTS.includes(name);
 }
 
 function createList(name, words) {

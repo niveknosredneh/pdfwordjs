@@ -206,7 +206,64 @@ function renderTree(node, path = '') {
             const countSpan = document.createElement('span');
             countSpan.className = 'tree-count';
             countSpan.textContent = totalMatches;
+            countSpan.title = 'Keyword matches';
             fileSpan.appendChild(countSpan);
+        }
+
+        const searchCount = state.globalSearchResults[doc.url];
+        if (searchCount > 0) {
+            const searchCountSpan = document.createElement('span');
+            searchCountSpan.className = 'tree-search-count';
+
+            let displayText = searchCount;
+            let isActive = state.globalSearchActiveDoc === doc.url && state.globalSearchQuery;
+            if (isActive) {
+                const results = state.globalSearchDocResults;
+                const currentIdx = state.globalSearchDocIndex;
+                if (results.length > 0 && currentIdx >= 0) {
+                    displayText = `${currentIdx + 1}/${results.length}`;
+                } else {
+                    isActive = false;
+                }
+            }
+
+            searchCountSpan.textContent = displayText;
+            searchCountSpan.title = isActive ? 'Click for next match' : `Click to view ${searchCount} matches`;
+
+            searchCountSpan.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (!state.globalSearchQuery) return;
+
+                const onSameDoc = state.currentDocUrl === doc.url;
+                const wasActive = state.globalSearchActiveDoc === doc.url;
+                const hasResults = state.globalSearchDocResults.length > 0;
+
+                if (onSameDoc && wasActive && hasResults) {
+                    fn.cycleGlobalSearch();
+                    renderResultsArea();
+                    return;
+                }
+
+                if (!onSameDoc) {
+                    _loadDocument(doc.url);
+                }
+
+                function tryActivateAndRender() {
+                    const isDocReady = doc.type === 'pdf'
+                        ? !!(state.pdfDoc && state.currentDocUrl === doc.url && state.textPageCache[1])
+                        : !!state.docContentCache[doc.url];
+                    if (isDocReady) {
+                        state.globalSearchActiveDoc = doc.url;
+                        fn.activateGlobalSearch();
+                        renderResultsArea();
+                    } else {
+                        setTimeout(tryActivateAndRender, 200);
+                    }
+                }
+                tryActivateAndRender();
+            });
+
+            fileSpan.appendChild(searchCountSpan);
         }
 
         fileSpan.addEventListener('click', function(e) {
@@ -241,6 +298,18 @@ export function renderResultsArea() {
 
 export function updateStats() {
     if (state._verboseRAF) return;
+
+    if (state.globalSearchQuery) {
+        const total = Object.values(state.globalSearchResults).reduce((a, b) => a + b, 0);
+        const files = Object.keys(state.globalSearchResults).length;
+        if (total > 0) {
+            dom.statusBar.textContent = `${total} global match${total !== 1 ? 'es' : ''} for "${state.globalSearchQuery}" in ${files} file${files !== 1 ? 's' : ''}`;
+        } else {
+            dom.statusBar.textContent = `No matches for "${state.globalSearchQuery}"`;
+        }
+        return;
+    }
+
     if (state.totalMatchesFound > 0) {
         dom.statusBar.textContent = `${state.totalMatchesFound} matches across ${state.totalDocsFound} document${state.totalDocsFound !== 1 ? 's' : ''}`;
     } else if (state.totalDocsFound > 0) {
@@ -338,9 +407,13 @@ export function updateProgressMainThread() {
     dom.progressBar.style.width = `${Math.round((state.processed / state.totalFiles) * 100)}%`;
     if (state.processed === state.totalFiles) {
         renderResultsArea();
-        dom.statusBar.textContent = state.totalMatchesFound === 0
-            ? 'No matches found'
-            : `${state.totalMatchesFound} matches across ${state.totalDocsFound} document${state.totalDocsFound !== 1 ? 's' : ''}`;
+        if (state.globalSearchQuery) {
+            fn.performGlobalSearch(state.globalSearchQuery);
+        } else {
+            dom.statusBar.textContent = state.totalMatchesFound === 0
+                ? 'No matches found'
+                : `${state.totalMatchesFound} matches across ${state.totalDocsFound} document${state.totalDocsFound !== 1 ? 's' : ''}`;
+        }
         if (state.currentDocUrl) {
             updateKeywordGrid(state.currentDocUrl);
         }

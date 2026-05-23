@@ -17,6 +17,10 @@ let customSearchResults = [];
 let customSearchIndex = 0;
 
 export function clearSearch() {
+    state.globalSearchActiveDoc = '';
+    state.globalSearchDocResults = [];
+    state.globalSearchDocIndex = 0;
+    state._gsPos = -1;
     state.activeKeyword = '';
     state.searchResults = [];
     state.searchResultsByPage = {};
@@ -33,6 +37,16 @@ export function clearSearch() {
 
 export function clearAllResults() {
     dom.resultsArea.innerHTML = '<h1 class="status-msg"><img src="icons/folder.svg" width="32" height="32" alt="folder"><img src="icons/pdf.svg" width="32" height="32" alt="pdf"><img src="icons/docx.svg" width="32" height="32" alt="docx"><img src="icons/zip.svg" width="32" height="32" alt="zip"></h1><h2 class="status-msg">Drop here to begin scanning</h2>';
+
+    if (dom.globalSearchInput) {
+        dom.globalSearchInput.value = '';
+        state.globalSearchQuery = '';
+        state.globalSearchResults = {};
+        state.globalSearchActiveDoc = '';
+        state.globalSearchDocResults = [];
+        state.globalSearchDocIndex = 0;
+        state._gsPos = -1;
+    }
 
     const viewerDropMsg = document.getElementById('viewerDropMsg');
     if (viewerDropMsg) viewerDropMsg.style.display = 'block';
@@ -183,10 +197,10 @@ function performCustomSearch(query) {
     customSearchIndex = 0;
 
     if (results.length > 0) {
-        searchOverlayResults.textContent = '1 / ' + results.length;
+        if (searchOverlayResults) searchOverlayResults.textContent = '1 / ' + results.length;
         customGoToMatch(0);
     } else {
-        searchOverlayResults.textContent = '0 / 0';
+        if (searchOverlayResults) searchOverlayResults.textContent = '0 / 0';
         clearCustomHighlights();
     }
 }
@@ -195,7 +209,7 @@ async function customGoToMatch(index) {
     if (customSearchResults.length === 0) return;
 
     customSearchIndex = ((index % customSearchResults.length) + customSearchResults.length) % customSearchResults.length;
-    searchOverlayResults.textContent = (customSearchIndex + 1) + ' / ' + customSearchResults.length;
+    if (searchOverlayResults) searchOverlayResults.textContent = (customSearchIndex + 1) + ' / ' + customSearchResults.length;
 
     const result = customSearchResults[customSearchIndex];
 
@@ -672,7 +686,10 @@ export function setupEventListeners() {
             dom.matchInput.blur();
             closeMobileSidebar();
             closeSearchOverlay();
-            if (measure.getActiveTool()) {
+            if (measure.getIsCalibrating()) {
+                measure.cancelCalibration();
+                updateMeasureUI();
+            } else if (measure.getActiveTool()) {
                 measure.deactivateTool();
                 updateMeasureUI();
             }
@@ -780,6 +797,15 @@ export function setupEventListeners() {
     const scaleInput = document.getElementById('scaleInput');
     if (scaleInput) {
         const updateScale = () => {
+            if (measure.getIsCalibrating()) {
+                const val = scaleInput.value.trim();
+                if (val && !isNaN(parseFloat(val))) {
+                    // valid number for calibration, keep as-is
+                } else {
+                    scaleInput.value = '';
+                }
+                return;
+            }
             const numStr = scaleInput.value.replace(/.*:/, '').replace(/[^0-9.]/g, '');
             const parsed = parseFloat(numStr);
             if (!isNaN(parsed) && parsed >= 0.001) {
@@ -790,7 +816,19 @@ export function setupEventListeners() {
         };
         scaleInput.addEventListener('change', updateScale);
         scaleInput.addEventListener('blur', updateScale);
-        scaleInput.addEventListener('focus', () => { scaleInput.value = ''; });
+        scaleInput.addEventListener('focus', () => {
+            if (measure.getIsCalibrating()) {
+                scaleInput.select();
+            } else {
+                scaleInput.value = '';
+            }
+        });
+        scaleInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && measure.getIsCalibrating()) {
+                e.preventDefault();
+                scaleInput.blur();
+            }
+        });
         scaleInput.value = '1:' + measure.getScale();
     }
 
@@ -814,10 +852,13 @@ export function updateMeasureUI() {
     const distBtn = document.getElementById('measureDistBtn');
     const perimBtn = document.getElementById('measurePerimBtn');
     const areaBtn = document.getElementById('measureAreaBtn');
+    const calBtn = document.getElementById('calibrateScaleBtn');
     const active = measure.getActiveTool();
+    const calibrating = measure.getIsCalibrating();
     if (distBtn) distBtn.classList.toggle('active-tool', active === 'distance');
     if (perimBtn) perimBtn.classList.toggle('active-tool', active === 'perimeter');
     if (areaBtn) areaBtn.classList.toggle('active-tool', active === 'area');
+    if (calBtn) calBtn.classList.toggle('active-tool', calibrating);
 }
 
 window.addEventListener('beforeunload', () => {
@@ -837,3 +878,232 @@ dom.statusBar.innerHTML = '<span>Ready</span><span>#__BUNDLE_HASH__ __COMMIT_DAT
 state.touchStartDist = 0;
 state.touchStartScale = 1.0;
 state.pageObserver = null;
+
+// ── Global search across all loaded files ──
+
+let globalSearchTimer = null;
+
+export function activateGlobalSearch() {
+    const query = state.globalSearchQuery;
+    if (!query) return;
+
+    if (state.currentDocUrl && state.docContentCache[state.currentDocUrl]) {
+        fn.performDocSearch(query);
+        state.globalSearchDocResults = state.docSearchResults;
+        state.globalSearchDocIndex = state.docCurrentMatchIndex;
+        return;
+    }
+
+    if (!state.pdfDoc) return;
+
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const localRegex = new RegExp(escaped, 'gi');
+    const results = [];
+
+    for (let pageNum = 1; pageNum <= state.totalPages; pageNum++) {
+        const cached = state.textPageCache[pageNum];
+        if (!cached) continue;
+        const pageText = cached.text;
+        let match;
+        while ((match = localRegex.exec(pageText)) !== null) {
+            results.push({ page: pageNum, startIndex: match.index, endIndex: match.index + match[0].length, text: match[0] });
+        }
+        localRegex.lastIndex = 0;
+    }
+
+    customSearchResults = results;
+    customSearchIndex = 0;
+    state.globalSearchDocResults = results;
+    state.globalSearchDocIndex = 0;
+
+    if (results.length > 0) {
+        customGoToMatch(0);
+    } else {
+        clearCustomHighlights();
+    }
+}
+
+export function cycleGlobalSearch() {
+    if (state.currentDocUrl && state.docContentCache[state.currentDocUrl]) {
+        fn.findNext();
+        state.globalSearchDocIndex = state.docCurrentMatchIndex;
+        state.globalSearchDocResults = state.docSearchResults;
+        return;
+    }
+
+    if (customSearchResults.length > 0) {
+        customGoToMatch(customSearchIndex + 1);
+        state.globalSearchDocIndex = customSearchIndex;
+        state.globalSearchDocResults = [...customSearchResults];
+    }
+}
+
+export function cycleGlobalSearchPrev() {
+    if (state.currentDocUrl && state.docContentCache[state.currentDocUrl]) {
+        fn.findPrev();
+        state.globalSearchDocIndex = state.docCurrentMatchIndex;
+        state.globalSearchDocResults = state.docSearchResults;
+        return;
+    }
+
+    if (customSearchResults.length > 0) {
+        customGoToMatch(customSearchIndex - 1);
+        state.globalSearchDocIndex = customSearchIndex;
+        state.globalSearchDocResults = [...customSearchResults];
+    }
+}
+
+function _gsNavigate(dir) {
+    if (!state.globalSearchQuery) return;
+    if (globalSearchTimer) clearTimeout(globalSearchTimer);
+
+    const docUrls = Object.keys(state.globalSearchResults)
+        .filter(url => state.globalSearchResults[url] > 0)
+        .sort((a, b) => {
+            const nameA = (state.docDataCache[a]?.name || a).toLowerCase();
+            const nameB = (state.docDataCache[b]?.name || b).toLowerCase();
+            return nameA.localeCompare(nameB);
+        });
+
+    if (docUrls.length === 0) return;
+
+    const hasResults = state.globalSearchDocResults.length > 0;
+    const atEnd = state.globalSearchDocIndex >= state.globalSearchDocResults.length - 1;
+    const atStart = state.globalSearchDocIndex <= 0;
+
+    if (hasResults) {
+        if (dir > 0 && !atEnd) {
+            cycleGlobalSearch();
+            fn.renderResultsArea();
+            return;
+        }
+        if (dir < 0 && !atStart) {
+            cycleGlobalSearchPrev();
+            fn.renderResultsArea();
+            return;
+        }
+    }
+
+    if (state._gsPos < 0) {
+        state._gsPos = dir > 0 ? 0 : docUrls.length - 1;
+    } else {
+        state._gsPos = ((state._gsPos + dir) % docUrls.length + docUrls.length) % docUrls.length;
+    }
+    _gsJumpToDoc(docUrls[state._gsPos]);
+}
+
+export function performGlobalSearch(query) {
+    if (globalSearchTimer) {
+        clearTimeout(globalSearchTimer);
+        globalSearchTimer = null;
+    }
+
+    const trimmed = query.trim();
+    if (!trimmed) {
+        state.globalSearchQuery = '';
+        state.globalSearchResults = {};
+        fn.updateStats();
+        fn.renderResultsArea();
+        return;
+    }
+
+    state.globalSearchQuery = trimmed;
+    state.globalSearchActiveDoc = '';
+    state.globalSearchDocResults = [];
+    state.globalSearchDocIndex = 0;
+    state._gsPos = -1;
+
+    dom.statusBar.textContent = `Searching ${Object.keys(state.docDataCache).length} file${Object.keys(state.docDataCache).length !== 1 ? 's' : ''} for "${trimmed}"...`;
+
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, 'gi');
+    const results = {};
+    let totalMatches = 0;
+    let filesWithMatches = 0;
+
+    for (const [url, doc] of Object.entries(state.docDataCache)) {
+        let text = '';
+
+        if ((doc.type === 'docx' || doc.type === 'doc') && state.docContentCache[url]) {
+            text = state.docContentCache[url].text || '';
+        } else if (doc.type === 'pdf' && state.docTextCache[url]) {
+            const cached = state.docTextCache[url];
+            if (cached.pages) {
+                for (const page of cached.pages) {
+                    text += page.text + ' ';
+                }
+            }
+        }
+
+        if (text) {
+            regex.lastIndex = 0;
+            let count = 0;
+            let m;
+            while ((m = regex.exec(text)) !== null) count++;
+            if (count > 0) {
+                results[url] = count;
+                totalMatches += count;
+                filesWithMatches++;
+            }
+        }
+    }
+
+    state.globalSearchResults = results;
+
+    if (totalMatches > 0) {
+        dom.statusBar.textContent = `${totalMatches} global match${totalMatches !== 1 ? 'es' : ''} for "${trimmed}" in ${filesWithMatches} file${filesWithMatches !== 1 ? 's' : ''}`;
+    } else {
+        dom.statusBar.textContent = `No matches for "${trimmed}"`;
+    }
+
+    fn.renderResultsArea();
+}
+
+function _gsJumpToDoc(url) {
+    const poll = () => {
+        const doc = state.docDataCache[url];
+        const isReady = doc?.type === 'pdf'
+            ? !!(state.pdfDoc && state.currentDocUrl === url && state.textPageCache[1])
+            : !!state.docContentCache[url];
+        if (isReady) {
+            state.globalSearchActiveDoc = url;
+            activateGlobalSearch();
+            fn.renderResultsArea();
+        } else {
+            setTimeout(poll, 200);
+        }
+    };
+
+    if (state.currentDocUrl !== url) {
+        fn.loadDocument(url);
+    }
+    poll();
+}
+
+function initGlobalSearch() {
+    dom.globalSearchInput.addEventListener('input', () => {
+        if (globalSearchTimer) clearTimeout(globalSearchTimer);
+        globalSearchTimer = setTimeout(() => {
+            performGlobalSearch(dom.globalSearchInput.value);
+        }, 250);
+    });
+
+    dom.globalSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            dom.globalSearchInput.value = '';
+            dom.globalSearchInput.blur();
+            performGlobalSearch('');
+            return;
+        }
+
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            _gsNavigate(1);
+        }
+    });
+
+    dom.gsPrevBtn.addEventListener('click', () => _gsNavigate(-1));
+    dom.gsNextBtn.addEventListener('click', () => _gsNavigate(1));
+}
+
+initGlobalSearch();

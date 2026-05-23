@@ -51,6 +51,13 @@ export const state = {
     customSearchResults: [],
     customSearchIndex: 0,
 
+    globalSearchQuery: '',
+    globalSearchResults: {},
+    globalSearchActiveDoc: '',
+    globalSearchDocResults: [],
+    globalSearchDocIndex: 0,
+    _gsPos: -1,
+
     _verboseRAF: null,
 
     MAX_FILE_SIZE: 500 * 1024 * 1024,

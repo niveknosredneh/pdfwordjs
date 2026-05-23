@@ -24,7 +24,7 @@ import * as ui from './ui.js';
 import * as keywords from './keywords.js';
 import * as ocr from './ocr.js';
 import * as measure from './measure.js';
-import { clearDivisions, initRibbon } from './pdf-divisions.js';
+
 
 register('setupVirtualPages', pdfRenderer.setupVirtualPages);
 register('isPageRendered', pdfRenderer.isPageRendered);
@@ -75,8 +75,11 @@ register('findNext', ui.findNext);
 register('findPrev', ui.findPrev);
 register('goToMatch', ui.goToMatch);
 register('toggleSettings', ui.toggleSettings);
-register('clearAllResults', () => { ui.clearAllResults(); clearDivisions(); });
-register('clearDivisions', clearDivisions);
+register('clearAllResults', ui.clearAllResults);
+register('performGlobalSearch', ui.performGlobalSearch);
+register('activateGlobalSearch', ui.activateGlobalSearch);
+register('cycleGlobalSearch', ui.cycleGlobalSearch);
+register('cycleGlobalSearchPrev', ui.cycleGlobalSearchPrev);
 
 register('populateKeywordSelect', keywords.populateKeywordSelect);
 
@@ -93,6 +96,9 @@ register('deactivateTool', measure.deactivateTool);
 register('clearMeasurements', measure.clearAllMeasurements);
 register('refreshAllMeasurements', measure.refreshAllMeasurements);
 register('renderAllMeasurements', measure.renderAllMeasurements);
+register('cancelCalibration', measure.cancelCalibration);
+register('startCalibration', measure.startCalibration);
+register('getIsCalibrating', measure.getIsCalibrating);
 
 rendering.setCallbacks({
     loadDocument: pdfLoader.loadDocument,
@@ -281,11 +287,14 @@ window.measureArea = function() {
     ui.updateMeasureUI();
 };
 window.clearMeasurements = function() { measure.clearAllMeasurements(); ui.updateMeasureUI(); };
+window.calibrateScale = function() {
+    measure.startCalibration();
+    ui.updateMeasureUI();
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
     await keywords.loadKeywords();
     keywords.populateListSelector();
     keywords.syncKeywordsToWindow();
     ui.setupEventListeners();
-    initRibbon();
 });

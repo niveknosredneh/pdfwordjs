@@ -37,10 +37,16 @@
             <select class="list-select" id="keywordListSelect" title="Keyword list"></select>
         </div>
         <div class="status-bar" id="statusBar"></div>
+        <div class="sidebar-search">
+            <div class="sidebar-search-row">
+                <input type="text" id="globalSearchInput" class="global-search-input" placeholder="Search all files..." autocomplete="off">
+                <button class="btn-icon gs-nav-btn" id="gsPrevBtn" title="Previous match">&#8592;</button>
+                <button class="btn-icon gs-nav-btn" id="gsNextBtn" title="Next match">&#8594;</button>
+            </div>
+        </div>
     </div>
 
     
-    <div id="divisionRibbon" class="division-ribbon" style="display:none"></div>
     <div id="results" class="results-area">
         <h1 class="status-msg">
         <img src="dist/icons/folder.svg" width="32" height="32" alt="folder">
@@ -94,6 +100,7 @@
             <button class="nav-clear" onclick="clearSearch()" title="Clear search">&#10005;</button>
         </div>
         <div class="toolbar-section toolbar-measure" id="measureSection">
+            <button onclick="calibrateScale()" id="calibrateScaleBtn" title="Calibrate scale (click two points on a known dimension)">&#9878;</button>
             <input type="text" class="scale-input small" id="scaleInput" value="1:100" placeholder="1:XXX" title="Scale 1:X">
             <button onclick="measureDistance()" id="measureDistBtn" title="Measure distance">&#8597;</button>
             <button onclick="measurePerimeter()" id="measurePerimBtn" title="Polyline (click points, dbl-click/Enter to finish)">&#8629;</button>

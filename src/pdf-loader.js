@@ -4,7 +4,6 @@ import { fn } from './cross.js';
 import { evictCaches } from './file-handler.js';
 import { setScale, autoDetectScale } from './measure.js';
 import { processTextContent } from './pdf-search.js';
-import { extractDivisions, populateRibbon, clearDivisions } from './pdf-divisions.js';
 
 function getDocTypeFromUrl(url) {
     const dataCached = state.docDataCache[url];
@@ -29,7 +28,6 @@ function loadPDF(fileUrl, keyword = '') {
     }
 
     state.currentDocUrl = fileUrl;
-    clearDivisions();
 
     if (state.pdfDoc) {
         try { state.pdfDoc.destroy(); } catch (e) { console.warn('Error destroying previous PDF:', e); }
@@ -126,11 +124,6 @@ function loadPDF(fileUrl, keyword = '') {
                     state.docDataCache[fileUrl].counts = counts;
                 }
             }
-
-            // Extract divisions from PDF outline or text scan
-            dom.loaderStatus.textContent = 'Scanning document structure...';
-            const divisions = await extractDivisions(state.pdfDoc);
-            populateRibbon(divisions);
 
             // Auto-detect measurement scale from embedded metadata or page text
             const detected = await autoDetectScale(fileUrl);

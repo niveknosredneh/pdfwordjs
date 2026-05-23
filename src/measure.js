@@ -18,6 +18,13 @@ let activePage = null;
 /** @type {boolean} */
 let isListening = false;
 
+/** @type {boolean} scale calibration mode */
+let isCalibrating = false;
+/** @type {number} known distance in meters entered by user */
+let calibrationMeters = 0;
+/** @type {{page:number, x:number, y:number}|null} first clicked point during calibration */
+let calibrationPoint = null;
+
 const STORAGE_KEY = 'kwpdf_measurements';
 const SCALE_STORAGE_KEY = 'kwpdf_measure_scale';
 const MAX_SCALE = 10000000;
@@ -230,6 +237,7 @@ export function getActiveTool() {
 
 /** @param {'distance'|'polyline'|'area'} tool */
 export function activateTool(tool) {
+    if (isCalibrating) cancelCalibration();
     if (activeTool === tool) {
         deactivateTool();
         return;
@@ -278,6 +286,53 @@ export function clearAllMeasurements() {
     renderAllMeasurements();
 }
 
+export function getIsCalibrating() {
+    return isCalibrating;
+}
+
+export function startCalibration() {
+    if (activeTool) deactivateTool();
+    cancelCalibration();
+    isCalibrating = true;
+    calibrationPoint = null;
+    calibrationMeters = 0;
+    if (!isListening) {
+        dom.viewerScroll.addEventListener('mousemove', onMouseMove);
+        isListening = true;
+    }
+    dom.viewerScroll.classList.add('is-measuring');
+    const scaleInput = document.getElementById('scaleInput');
+    if (scaleInput) {
+        scaleInput.value = '';
+        scaleInput.placeholder = 'm';
+        scaleInput.title = 'Enter known distance in meters, then click two points on the PDF';
+        scaleInput.focus();
+    }
+    renderAllMeasurements();
+}
+
+export function cancelCalibration() {
+    isCalibrating = false;
+    calibrationMeters = 0;
+    calibrationPoint = null;
+    previewLine = null;
+    activePage = null;
+    if (isListening && !activeTool) {
+        dom.viewerScroll.removeEventListener('mousemove', onMouseMove);
+        isListening = false;
+    }
+    dom.viewerScroll.classList.remove('is-measuring');
+    const scaleInput = document.getElementById('scaleInput');
+    if (scaleInput) {
+        scaleInput.placeholder = '1:XXX';
+        scaleInput.title = 'Scale 1:X';
+        scaleInput.value = '1:' + scaleX;
+    }
+    const btn = document.getElementById('calibrateScaleBtn');
+    if (btn) btn.classList.remove('active-tool');
+    renderAllMeasurements();
+}
+
 /** @param {string} id */
 export function deleteMeasurement(id) {
     const url = getDocKey();
@@ -296,6 +351,10 @@ export function getDocMeasurements(url) {
 
 /** @param {MouseEvent} e */
 export function onPageClick(e) {
+    if (isCalibrating) {
+        handleCalibrationClick(e);
+        return;
+    }
     if (!activeTool) return;
     const coords = pageEventToPdfCoords(e);
     if (!coords) return;
@@ -338,6 +397,66 @@ function handleDistanceClick(coords) {
 
 function generateId() {
     return Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+}
+
+// ── calibration ──
+
+/** @param {MouseEvent} e */
+function handleCalibrationClick(e) {
+    if (!isCalibrating) return;
+
+    const scaleInput = document.getElementById('scaleInput');
+    const meters = parseFloat(scaleInput?.value);
+    if (isNaN(meters) || meters <= 0) {
+        if (scaleInput) { scaleInput.focus(); scaleInput.select(); }
+        return;
+    }
+
+    const coords = pageEventToPdfCoords(e);
+    if (!coords) return;
+
+    if (!calibrationPoint) {
+        calibrationMeters = meters;
+        calibrationPoint = coords;
+        activePage = coords.page;
+        renderAllMeasurements();
+        return;
+    }
+
+    if (calibrationPoint.page !== coords.page) {
+        calibrationPoint = coords;
+        activePage = coords.page;
+        renderAllMeasurements();
+        return;
+    }
+
+    // Re-read meters in case user changed the value after first click
+    const currentMeters = parseFloat(scaleInput?.value);
+    if (isNaN(currentMeters) || currentMeters <= 0) return;
+    calibrationMeters = currentMeters;
+
+    const pdfDist = distanceBetween(calibrationPoint, coords);
+    if (pdfDist < 0.5) {
+        calibrationPoint = coords;
+        renderAllMeasurements();
+        return;
+    }
+
+    const computedScale = calibrationMeters * 1000 * POINTS_PER_MM / pdfDist;
+    const clamped = Math.max(0.001, Math.min(MAX_SCALE, computedScale));
+    const rounded = Math.round(clamped);
+
+    setScale(rounded);
+    saveScale();
+
+    if (scaleInput) {
+        scaleInput.value = '1:' + rounded;
+        scaleInput.placeholder = '1:XXX';
+        scaleInput.title = 'Scale 1:X';
+    }
+
+    renderAllMeasurements();
+    cancelCalibration();
 }
 
 function finalizeDistance() {
@@ -459,6 +578,27 @@ export function finishArea() {
 
 /** @param {MouseEvent} e */
 function onMouseMove(e) {
+    if (isCalibrating) {
+        if (!calibrationPoint) return;
+        const coords = pageEventToPdfCoords(e);
+        if (!coords) return;
+        if (coords.page !== activePage) {
+            if (previewLine) {
+                previewLine = null;
+                renderAllMeasurements();
+            }
+            return;
+        }
+        const snapped = e.shiftKey ? snapAngle45(calibrationPoint, coords, true) : coords;
+        previewLine = {
+            x1: calibrationPoint.x,
+            y1: calibrationPoint.y,
+            x2: snapped.x,
+            y2: snapped.y
+        };
+        renderAllMeasurements();
+        return;
+    }
     if (!activeTool || pendingPoints.length === 0) return;
     const coords = pageEventToPdfCoords(e);
     if (!coords) return;
@@ -496,6 +636,10 @@ export function renderAllMeasurements() {
         renderMeasurement(m);
     }
 
+    if (isCalibrating && calibrationPoint && activePage) {
+        renderCalibrationPendingPoint();
+    }
+
     if (pendingPoints.length > 0 && activePage) {
         if (activeTool === 'distance') {
             renderPendingPoint();
@@ -505,7 +649,11 @@ export function renderAllMeasurements() {
     }
 
     if (previewLine && activePage) {
-        renderPreviewLine();
+        if (isCalibrating) {
+            renderCalibrationPreview();
+        } else {
+            renderPreviewLine();
+        }
     }
 }
 
@@ -795,6 +943,42 @@ function renderArea(points, label, isPreview, measId) {
         const lbl = createLabel(cx * s, cy * s, color, label, measId);
         layer.appendChild(lbl);
     }
+}
+
+function renderCalibrationPendingPoint() {
+    if (!calibrationPoint) return;
+    const p = calibrationPoint;
+    const pageEl = getPageEl(p.page);
+    if (!pageEl) return;
+    const s = state.currentScale || 1;
+    const layer = getOrCreateLayer(pageEl);
+    const tx = p.x * s;
+    const ty = p.y * s;
+    const tick = createTick(tx, ty, 10, 2, 0, 'rgba(80, 255, 150, 0.75)', 'measure-tick-pending');
+    tick.style.boxShadow = '0 0 0 1px rgba(255,255,255,0.6)';
+    layer.appendChild(tick);
+}
+
+function renderCalibrationPreview() {
+    if (!previewLine || !activePage || !calibrationMeters) return;
+    const s = state.currentScale || 1;
+    const pageEl = getPageEl(activePage);
+    if (!pageEl) return;
+    const layer = getOrCreateLayer(pageEl);
+
+    const last = { x: previewLine.x1, y: previewLine.y1 };
+    const mouse = { x: previewLine.x2, y: previewLine.y2 };
+
+    drawGhostSegment(layer, last, mouse, s);
+
+    const pdfDist = distanceBetween(last, mouse);
+    if (pdfDist < 0.5) return;
+
+    const computedScale = calibrationMeters * 1000 * POINTS_PER_MM / pdfDist;
+    const clamped = Math.max(0.001, Math.min(MAX_SCALE, computedScale));
+    const rounded = Math.round(clamped);
+    const labelText = calibrationMeters + 'm \u2192 1:' + rounded;
+    addGhostLabel(layer, (last.x + mouse.x) / 2 * s, (last.y + mouse.y) / 2 * s, labelText);
 }
 
 function renderPreviewLine() {

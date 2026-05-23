@@ -648,7 +648,7 @@ function renderPerimeter(points, label, isPreview, measId) {
 
     for (let i = 0; i < points.length - 1; i++) {
         const p1 = points[i], p2 = points[i + 1];
-        drawLineSegment(layer, p1, p2, s, color);
+        drawLineSegment(layer, p1, p2, s, color, measId);
     }
 
     // Ticks only at first and last point

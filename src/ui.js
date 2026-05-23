@@ -494,6 +494,12 @@ function toggleAnimate() {
 }
 
 export function closeMobileSidebar() {
+    if (window.innerWidth > 600) {
+        const sidebarEl = document.getElementById('sidebar');
+        sidebarEl.classList.remove('collapsed', 'open');
+        state.mobileSidebarOpen = false;
+        return;
+    }
     const sidebarEl = document.getElementById('sidebar');
     const viewerEl = document.querySelector('.viewer-container');
     sidebarEl.classList.remove('open');
@@ -503,6 +509,7 @@ export function closeMobileSidebar() {
 }
 
 function openMobileSidebar() {
+    if (window.innerWidth > 600) return;
     const sidebarEl = document.getElementById('sidebar');
     const viewerEl = document.querySelector('.viewer-container');
     sidebarEl.classList.add('open');
@@ -872,7 +879,12 @@ dom.statusBar.innerHTML = '<span>Ready</span><span>#__BUNDLE_HASH__ __COMMIT_DAT
 
 (function initTheme() {
     const savedTheme = localStorage.getItem('pdf_theme');
-    if (savedTheme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    if (savedTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+        if (!savedTheme) localStorage.setItem('pdf_theme', 'light');
+    }
 })();
 
 state.touchStartDist = 0;

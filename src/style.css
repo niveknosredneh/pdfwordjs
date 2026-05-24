@@ -372,6 +372,14 @@ input, select, button, textarea {
     min-width: 16px;
     text-align: center;
     flex-shrink: 0;
+    user-select: none;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background .15s, border-color .15s;
+}
+.tree-count:hover {
+    background: var(--grey-600);
+    border-color: var(--grey-400);
 }
 
 .tree-search-count {
@@ -387,6 +395,12 @@ input, select, button, textarea {
     margin-left: 3px;
     border: 1px solid var(--accent-hover);
     cursor: pointer;
+    user-select: none;
+    transition: background .15s, border-color .15s;
+}
+.tree-search-count:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent);
 }
 
 .sidebar ul.tree-nested {

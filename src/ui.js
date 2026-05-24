@@ -1055,9 +1055,10 @@ export function cycleGlobalSearchPrev() {
     }
 }
 
+let _gsPendingNavigate = 0;
+
 function _gsNavigate(dir) {
     if (!state.globalSearchQuery) return;
-    if (globalSearchTimer) clearTimeout(globalSearchTimer);
 
     // Still waiting for a previous file jump to complete
     if (_gsPendingUrl) return;
@@ -1111,6 +1112,7 @@ export function performGlobalSearch(query) {
     }
     globalSearchChunkId++;
     _gsPendingUrl = null;
+    _gsPendingNavigate = 0;
 
     const trimmed = query.trim();
     if (!trimmed) {
@@ -1122,9 +1124,16 @@ export function performGlobalSearch(query) {
     }
 
     state.globalSearchQuery = trimmed;
+    state.globalSearchResults = {};
     state.globalSearchActiveDoc = '';
     state.globalSearchDocResults = [];
     state.globalSearchDocIndex = 0;
+    state.docSearchResults = [];
+    state.docCurrentMatchIndex = -1;
+    customSearchResults = [];
+    customSearchIndex = 0;
+    state.searchResults = [];
+    state.currentMatchIndex = -1;
     state._gsPos = -1;
 
     const totalFiles = Object.keys(state.docDataCache).length;
@@ -1183,6 +1192,12 @@ export function performGlobalSearch(query) {
             }
 
             state.emit('results-changed');
+
+            if (_gsPendingNavigate) {
+                const dir = _gsPendingNavigate;
+                _gsPendingNavigate = 0;
+                _gsNavigate(dir);
+            }
         }
     }
 
@@ -1217,6 +1232,18 @@ function _gsJumpToDoc(url, navigateToLast) {
     poll();
 }
 
+function flushAndNavigate(dir) {
+    const val = dom.globalSearchInput.value.trim();
+    if (globalSearchTimer) clearTimeout(globalSearchTimer);
+    globalSearchTimer = null;
+    if (val && val !== state.globalSearchQuery) {
+        performGlobalSearch(val);
+        _gsPendingNavigate = dir;
+    } else {
+        _gsNavigate(dir);
+    }
+}
+
 function initGlobalSearch() {
     dom.globalSearchInput.addEventListener('input', () => {
         if (globalSearchTimer) clearTimeout(globalSearchTimer);
@@ -1235,12 +1262,12 @@ function initGlobalSearch() {
 
         if (e.key === 'Enter') {
             e.preventDefault();
-            _gsNavigate(1);
+            flushAndNavigate(1);
         }
     });
 
-    dom.gsPrevBtn.addEventListener('click', () => _gsNavigate(-1));
-    dom.gsNextBtn.addEventListener('click', () => _gsNavigate(1));
+    dom.gsPrevBtn.addEventListener('click', () => flushAndNavigate(-1));
+    dom.gsNextBtn.addEventListener('click', () => flushAndNavigate(1));
 
     dom.gsClearBtn.addEventListener('click', () => {
         dom.globalSearchInput.value = '';

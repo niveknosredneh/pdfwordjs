@@ -8,7 +8,9 @@
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/favicon.ico">
-    <link rel="preload" href="fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('service_worker.js')
@@ -48,13 +50,16 @@
 
     
     <div id="results" class="results-area">
-        <h1 class="status-msg">
-        <img src="icons/folder.svg" width="32" height="32" alt="folder">
-        <img src="icons/pdf.svg" width="32" height="32" alt="pdf">
-        <img src="icons/docx.svg" width="32" height="32" alt="docx">
-        <img src="icons/zip.svg" width="32" height="32" alt="zip">
-        </h1>
-        <h2 class="status-msg">Drop here to begin scanning</h2>
+        <div class="drop-zone-empty">
+            <div class="drop-zone-empty-icon">
+                <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M24 4L24 32M24 4L16 12M24 4L32 12"/>
+                    <path d="M8 28L8 40C8 41.1 8.9 42 10 42L38 42C39.1 42 40 41.1 40 40L40 28"/>
+                </svg>
+            </div>
+            <h2 class="drop-zone-empty-title">Drop files to begin scanning</h2>
+            <p class="drop-zone-empty-text">PDF &middot; DOCX &middot; ZIP &mdash; any folder or archive</p>
+        </div>
     </div>
 
     <div id="keyword-grid-panel" class="keyword-grid-panel">
@@ -75,44 +80,65 @@
 <div class="viewer-container">
     <div class="viewer-toolbar">
         <div class="toolbar-section toolbar-zoom">
-            <button id="zoomOutBtn" title="Zoom Out (Ctrl+-)" aria-label="Zoom Out (Ctrl+-)">-</button>
-            <span class="zoom-level" id="zoomLevel">100%</span>
-            <button id="zoomInBtn" title="Zoom In (Ctrl++)" aria-label="Zoom In (Ctrl++)">+</button>
-            <button id="zoomFitBtn" title="Fit Width" aria-label="Fit Width">Fit</button>
-            <button id="zoomActualBtn" title="Actual Size" aria-label="Actual Size">1:1</button>
+            <div class="toolbar-row">
+                <button id="zoomOutBtn" title="Zoom Out (Ctrl+-)" aria-label="Zoom Out (Ctrl+-)">-</button>
+                <span class="zoom-level" id="zoomLevel">100%</span>
+                <button id="zoomInBtn" title="Zoom In (Ctrl++)" aria-label="Zoom In (Ctrl++)">+</button>
+            </div>
+            <div class="toolbar-row">
+                <button id="zoomActualBtn" title="Actual Size" aria-label="Actual Size">1:1</button>
+                <button id="zoomFitBtn" title="Fit Width" aria-label="Fit Width">Fit</button>
+            </div>
         </div>
         <div class="toolbar-section toolbar-page">
-            <button id="prevPageBtn" title="Previous page" aria-label="Previous page">&#8592;</button>
-            <input type="number" class="page-input small" id="pageInput" min="1" placeholder="0" title="Go to page (G)">
-            <span class="dim">/ <span id="pageTotal">0</span></span>
-            <button id="nextPageBtn" title="Next page" aria-label="Next page">&#8594;</button>
+            <div class="toolbar-row">
+                <input type="number" class="page-input small" id="pageInput" min="1" placeholder="0" title="Go to page (G)">
+                <span class="dim">/ <span id="pageTotal">0</span></span>
+            </div>
+            <div class="toolbar-row">
+                <button id="prevPageBtn" title="Previous page" aria-label="Previous page">&#8592;</button>
+                <button id="nextPageBtn" title="Next page" aria-label="Next page">&#8594;</button>
+            </div>
         </div>
         <div class="toolbar-section toolbar-keyword" id="navGroup">
-            <span class="separator" id="navSep" style="display:none;">|</span>
-            <button id="searchToggleBtn" class="search-toggle-btn" title="Search (Ctrl+F)" aria-label="Search (Ctrl+F)">⌕</button>
-            <select class="keyword-select small" id="keywordSelect" title="Keyword"></select>
-            <!-- <button id="kwManageBtn" class="kw-manage-btn" title="Manage keyword lists" aria-label="Manage keyword lists">&#9881;</button> -->
-            <button id="findPrevBtn" title="Previous match" aria-label="Previous match">&#8592;</button>
-            <input type="number" class="match-input small" id="matchInput" min="1" placeholder="0" title="Go to match number">
-            <span class="dim">/ <span id="matchTotal">0</span></span>
-            <button id="findNextBtn" title="Next match" aria-label="Next match">&#8594;</button>
-            <button id="clearSearchBtn" class="nav-clear" title="Clear search" aria-label="Clear search">&#10005;</button>
+            <div class="toolbar-row">
+                <button id="searchToggleBtn" class="search-toggle-btn" title="Search (Ctrl+F)" aria-label="Search (Ctrl+F)">⌕</button>
+                <input type="number" class="match-input small" id="matchInput" min="1" placeholder="0" title="Go to match number">
+                <span class="dim">/ <span id="matchTotal">0</span></span>
+            </div>
+            <div class="toolbar-row">
+                <span class="separator" id="navSep" style="display:none;">|</span>
+                <select class="keyword-select small" id="keywordSelect" title="Keyword"></select>
+                <button id="findPrevBtn" title="Previous match" aria-label="Previous match">&#8592;</button>
+                <button id="findNextBtn" title="Next match" aria-label="Next match">&#8594;</button>
+                <button id="clearSearchBtn" class="nav-clear" title="Clear search" aria-label="Clear search">&#10005;</button>
+            </div>
         </div>
         <div class="toolbar-section toolbar-measure" id="measureSection">
-            <button id="calibrateScaleBtn" title="Calibrate scale (click two points on a known dimension)" aria-label="Calibrate scale (click two points on a known dimension)">&#9878;</button>
-            <input type="text" class="scale-input small" id="scaleInput" value="1:100" placeholder="1:XXX" title="Scale 1:X">
-            <button id="measureDistBtn" title="Measure distance" aria-label="Measure distance">&#8597;</button>
-            <button id="measurePerimBtn" title="Polyline (click points, dbl-click/Enter to finish)" aria-label="Polyline (click points, dbl-click/Enter to finish)">&#8629;</button>
-            <button id="measureAreaBtn" title="Area (click points, dbl-click/Enter to close)" aria-label="Area (click points, dbl-click/Enter to close)">&#9633;</button>
-            <button id="clearMeasureBtn" title="Clear all measurements" aria-label="Clear all measurements">&#10005;</button>
+            <div class="toolbar-row">
+                <button id="calibrateScaleBtn" title="Calibrate scale (click two points on a known dimension)" aria-label="Calibrate scale (click two points on a known dimension)">&#9878;</button>
+                <input type="text" class="scale-input small" id="scaleInput" value="1:100" placeholder="1:XXX" title="Scale 1:X">
+            </div>
+            <div class="toolbar-row">
+                <button id="measureDistBtn" title="Measure distance" aria-label="Measure distance">&#8597;</button>
+                <button id="measurePerimBtn" title="Polyline (click points, dbl-click/Enter to finish)" aria-label="Polyline (click points, dbl-click/Enter to finish)">&#8629;</button>
+                <button id="measureAreaBtn" title="Area (click points, dbl-click/Enter to close)" aria-label="Area (click points, dbl-click/Enter to close)">&#9633;</button>
+                <button id="clearMeasureBtn" title="Clear all measurements" aria-label="Clear all measurements">&#10005;</button>
+            </div>
         </div>
     </div>
 
     <div class="viewer-scroll" id="viewerScroll">
-        <div id="viewerDropMsg">
-        <h2>&#10548; Drop a folder to begin scanning</h2>
-        <p></p>
-    </div>
+        <div id="viewerDropMsg" class="drop-zone-viewer">
+            <div class="drop-zone-viewer-icon">
+                <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M24 4L24 32M24 4L16 12M24 4L32 12"/>
+                    <path d="M8 28L8 40C8 41.1 8.9 42 10 42L38 42C39.1 42 40 41.1 40 40L40 28"/>
+                </svg>
+            </div>
+            <h2 class="drop-zone-viewer-title">Drop files to begin scanning</h2>
+            <p class="drop-zone-viewer-text">PDF &middot; DOCX &middot; ZIP &mdash; any folder or archive</p>
+        </div>
         <div id="viewerLoader" aria-live="polite">
             <div class="spinner"></div>
             <div class="loader-details">

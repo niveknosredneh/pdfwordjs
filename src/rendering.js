@@ -191,7 +191,15 @@ function renderTree(node, path = '') {
         if (totalMatches > 0) {
             const countSpan = document.createElement('span');
             countSpan.className = 'tree-count';
-            countSpan.textContent = totalMatches;
+            let displayText = totalMatches;
+            if (state.allKeywordMode && state.currentDocUrl === doc.url) {
+                if (doc.type === 'pdf' && state.searchResults.length > 0 && state.currentMatchIndex >= 0) {
+                    displayText = `${state.currentMatchIndex + 1}/${state.searchResults.length}`;
+                } else if ((doc.type === 'docx' || doc.type === 'doc') && state.docSearchResults.length > 0 && state.docCurrentMatchIndex >= 0) {
+                    displayText = `${state.docCurrentMatchIndex + 1}/${state.docSearchResults.length}`;
+                }
+            }
+            countSpan.textContent = displayText;
             countSpan.title = 'Keyword matches';
 
             countSpan.addEventListener('click', function(e) {
@@ -377,6 +385,25 @@ export function updateSidebarBadge() {
             keywordLocalIndex = 0;
             for (let i = 0; i <= idx; i++) {
                 if (results[i].keyword === currentKeyword) keywordLocalIndex++;
+            }
+        }
+    }
+
+    const curFileItem = state.currentDocUrl ? document.querySelector(`.tree-file-item[data-url="${CSS.escape(state.currentDocUrl)}"]`) : null;
+    if (curFileItem) {
+        const countSpan = curFileItem.querySelector('.tree-count');
+        if (countSpan) {
+            const isPdf = state.currentDocType === 'pdf';
+            const kwResults = isPdf ? state.searchResults : state.docSearchResults;
+            const kwIndex = isPdf ? state.currentMatchIndex : state.docCurrentMatchIndex;
+            if (state.allKeywordMode && kwResults.length > 0 && kwIndex >= 0) {
+                countSpan.textContent = `${kwIndex + 1}/${kwResults.length}`;
+            } else {
+                const doc = state.docDataCache[state.currentDocUrl];
+                if (doc) {
+                    const total = Object.values(doc.counts).reduce((a, b) => a + b, 0);
+                    countSpan.textContent = total || 0;
+                }
             }
         }
     }

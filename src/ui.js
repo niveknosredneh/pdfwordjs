@@ -931,7 +931,7 @@ let globalSearchChunkId = 0;
 let _gsPendingUrl = null;
 const GS_CHUNK_SIZE = 20;
 
-export function activateGlobalSearch(navigateToLast) {
+export function activateGlobalSearch(navigateToLast, noScroll) {
     const query = state.globalSearchQuery;
     if (!query) return;
 
@@ -964,12 +964,15 @@ export function activateGlobalSearch(navigateToLast) {
     }
 
     customSearchResults = results;
-    customSearchIndex = 0;
+    customSearchIndex = noScroll ? -1 : 0;
     state.globalSearchDocResults = results;
     state.globalSearchDocIndex = 0;
 
     if (results.length > 0) {
-        if (navigateToLast) {
+        if (noScroll) {
+            // populate state without scrolling
+            clearCustomHighlights();
+        } else if (navigateToLast) {
             customGoToMatch(results.length - 1);
             state.globalSearchDocIndex = customSearchIndex;
         } else {
@@ -1092,6 +1095,20 @@ function _gsNavigate(dir) {
     }
     if (dir < 0 && !atStart) {
         cycleGlobalSearchPrev();
+        state.emit('results-changed');
+        return;
+    }
+
+    // Per-file state is empty (fresh search) — activate in current file if it has results
+    if (state.currentDocUrl && state.globalSearchResults[state.currentDocUrl] > 0) {
+        state.globalSearchActiveDoc = state.currentDocUrl;
+        if (state.currentDocUrl && state.docContentCache[state.currentDocUrl]) {
+            activateGlobalSearch(dir < 0);
+        } else {
+            activateGlobalSearch(false, true);
+            if (dir > 0) cycleGlobalSearch();
+            else cycleGlobalSearchPrev();
+        }
         state.emit('results-changed');
         return;
     }

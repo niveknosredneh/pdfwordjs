@@ -1,36 +1,41 @@
- # KeyWord-PDF
+# kwpdf
 
-A simple viewer for .pdf and .docx files that automatically searches documents upon open for a large pre-defined list of keywords and allows you to quickly jump between matches.
+A document viewer for PDF and DOCX files that automatically scans documents against a keyword list and lets you quickly jump between matches.
 
-<img src="https://kvnhndrsn.github.io/projects/kwpdf.gif" height="480" align="middle">
+<img src="https://kvnhndrsn.github.io/projects/kwpdf.gif" height="480">
 
-## Install
+## Features
 
-```
-# clone repo 
+- **Keyword scanning** — documents are searched against a pre-defined keyword list on open
+- **Global search & cross-file navigation** — search and jump between matches across all loaded files
+- **Measurement tools** — calibrated distance, perimeter, and area measurements on PDF pages
+- **ZIP file support** — drag and drop zip file right from file explorer, email or browser downloads 
+- **OCR support** (beta) — extract text from scanned PDFs via Tesseract.js
+
+## Getting Started
+
+```bash
 git clone https://github.com/kvnhndrsn/kwpdf
-cd kwpdf/  
-
-# nano keywords.json
-
-# start python web server and open page
-python3 -m http.server 8895 &   
-xdg-open http://localhost:8895
+cd kwpdf/
+npm install
+npm run build
+python3 -m http.server 8895
 ```
-## Imports
 
-* **[PDFjs](https://mozilla.github.io/pdf.js/)** - PDF parsing
-* **[jszip](https://stuk.github.io/jszip/)** - ZIP file support
-* **[mammoth.js](https://github.com/mwilliamson/mammoth.js/)** - DOCX file support
-* **[Tesseract.js](https://tesseract.projectnaptha.com/)** - OCR support
+Open http://localhost:8895 in your browser.
 
+### Customizing Keywords
 
-## Authors
+Edit `keywords.json` to define your own keyword lists before serving the page.
 
-* **Kevin Matthew Henderson**
+## Built With
 
-## Contributors
+- [PDF.js](https://mozilla.github.io/pdf.js/) — PDF rendering
+- [jszip](https://stuk.github.io/jszip/) — ZIP file support
+- [Mammoth.js](https://github.com/mwilliamson/mammoth.js/) — DOCX conversion
+- [Tesseract.js](https://tesseract.projectnaptha.com/) — OCR engine
+- [esbuild](https://esbuild.github.io/) — bundling
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](https://github.com/kvnhndrsn/kwpdf/blob/main/LICENSE.md) file for details
+MIT — see [LICENSE.md](LICENSE.md).

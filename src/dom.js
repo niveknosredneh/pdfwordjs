@@ -1,73 +1,135 @@
-export const viewer = document.getElementById('pdfViewer');
-export const viewerScroll = document.getElementById('viewerScroll');
-export const loader = document.getElementById('viewerLoader');
-export const loaderFilename = document.getElementById('loaderFilename');
-export const loaderStatus = document.getElementById('loaderStatus');
-export const loaderProgressFill = document.getElementById('loaderProgressFill');
-export const matchTotal = document.getElementById('matchTotal');
-export const navGroup = document.getElementById('navGroup');
-export const navSep = document.getElementById('navSep');
-export const zoomLevelEl = document.getElementById('zoomLevel');
-export const pageInput = document.getElementById('pageInput');
-export const pageTotal = document.getElementById('pageTotal');
-export const matchInput = document.getElementById('matchInput');
-export const keywordSelect = document.getElementById('keywordSelect');
-export const resultsArea = document.getElementById('results');
-let _progressPb = null;
+export let viewer;
+export let viewerScroll;
+export let loader;
+export let loaderFilename;
+export let loaderStatus;
+export let loaderProgressFill;
+export let matchTotal;
+export let navGroup;
+export let navSep;
+export let zoomLevelEl;
+export let pageInput;
+export let pageTotal;
+export let matchInput;
+export let keywordSelect;
+export let kwManageBtn;
+export let resultsArea;
+export let sidebar;
+export let statusBar;
+export let verboseStatusBar;
+export let globalSearchInput;
+export let gsPrevBtn;
+export let gsNextBtn;
+export let gsClearBtn;
+export let folderInput;
+export let keywordMenu;
+export let kwListSelector;
+export let kwNewListBtn;
+export let kwDeleteListBtn;
+export let kwListInfo;
+export let kwInput;
+export let kwExportBtn;
+export let kwImportBtn;
+export let kwCancelBtn;
+export let kwSaveBtn;
+export let keywordListSelect;
+export let newListDialog;
+export let newListName;
+export let hideNewListBtn;
+export let createNewListBtn;
+export let settingsBtn;
+export let settingsMenu;
+export let settingsKwBtn;
+export let settingsThemeBtn;
+export let settingsAnimateBtn;
+export let resizer;
+export let viewerContainer;
+export let viewerDropMsg;
+export let zoomInBtn;
+export let zoomOutBtn;
+export let zoomFitBtn;
+export let zoomActualBtn;
+export let prevPageBtn;
+export let nextPageBtn;
+export let searchToggleBtn;
+export let findPrevBtn;
+export let findNextBtn;
+export let clearSearchBtn;
+export let clearAllBtn;
+export let mobileToggleBtn;
+export let calibrateScaleBtn;
+export let measureDistBtn;
+export let measurePerimBtn;
+export let measureAreaBtn;
+export let clearMeasureBtn;
+export let scaleInput;
+export let progressBar;
 
-async function initProgressBar() {
-    const container = document.querySelector('.progress-svg-wrap');
-    if (!container) return;
-    try {
-        const resp = await fetch('icons/logo.svg');
-        const text = await resp.text();
-        const parser = new DOMParser();
-        const svgDoc = parser.parseFromString(text, 'image/svg+xml');
-        const srcPath = svgDoc.querySelector('path');
-        if (!srcPath) return;
-        const d = srcPath.getAttribute('d');
-        const vb = svgDoc.documentElement.getAttribute('viewBox') || '0 0 1000 1000';
-        container.innerHTML = '<svg viewBox="' + vb + '" preserveAspectRatio="xMidYMid meet">'
-            + '<path d="' + d + '" fill="none" stroke="var(--grey-500)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.05" />'
-            + '<path id="progressBar-svg-path" d="' + d + '" fill="none" stroke="var(--green)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.5" />'
-            + '</svg>';
-        if (typeof ProgressBar !== 'undefined') {
-            _progressPb = new ProgressBar.Path('#progressBar-svg-path', { duration: 500, easing: 'easeInOut' });
-        }
-    } catch (e) {
-        console.warn('[Progress] Failed to load logo.svg:', e);
-    }
+export function init() {
+    viewer = document.getElementById('pdfViewer');
+    viewerScroll = document.getElementById('viewerScroll');
+    loader = document.getElementById('viewerLoader');
+    loaderFilename = document.getElementById('loaderFilename');
+    loaderStatus = document.getElementById('loaderStatus');
+    loaderProgressFill = document.getElementById('loaderProgressFill');
+    matchTotal = document.getElementById('matchTotal');
+    navGroup = document.getElementById('navGroup');
+    navSep = document.getElementById('navSep');
+    zoomLevelEl = document.getElementById('zoomLevel');
+    pageInput = document.getElementById('pageInput');
+    pageTotal = document.getElementById('pageTotal');
+    matchInput = document.getElementById('matchInput');
+    keywordSelect = document.getElementById('keywordSelect');
+    kwManageBtn = document.getElementById('kwManageBtn');
+    resultsArea = document.getElementById('results');
+    sidebar = document.getElementById('sidebar');
+    statusBar = document.getElementById('statusBar');
+    verboseStatusBar = document.getElementById('verboseStatusBar');
+    globalSearchInput = document.getElementById('globalSearchInput');
+    gsPrevBtn = document.getElementById('gsPrevBtn');
+    gsNextBtn = document.getElementById('gsNextBtn');
+    gsClearBtn = document.getElementById('gsClearBtn');
+    folderInput = document.getElementById('folderInput');
+    keywordMenu = document.getElementById('keywordMenu');
+    kwListSelector = document.getElementById('kwListSelector');
+    kwNewListBtn = document.getElementById('kwNewListBtn');
+    kwDeleteListBtn = document.getElementById('kwDeleteListBtn');
+    kwListInfo = document.getElementById('kwListInfo');
+    kwInput = document.getElementById('kwInput');
+    kwExportBtn = document.getElementById('kwExportBtn');
+    kwImportBtn = document.getElementById('kwImportBtn');
+    kwCancelBtn = document.getElementById('kwCancelBtn');
+    kwSaveBtn = document.getElementById('kwSaveBtn');
+    keywordListSelect = document.getElementById('keywordListSelect');
+    newListDialog = document.getElementById('newListDialog');
+    newListName = document.getElementById('newListName');
+    hideNewListBtn = document.getElementById('hideNewListBtn');
+    createNewListBtn = document.getElementById('createNewListBtn');
+    settingsBtn = document.getElementById('settingsBtn');
+    settingsMenu = document.getElementById('settingsMenu');
+    settingsKwBtn = document.getElementById('settingsKwBtn');
+    settingsThemeBtn = document.getElementById('settingsThemeBtn');
+    settingsAnimateBtn = document.getElementById('settingsAnimateBtn');
+    resizer = document.getElementById('resizer');
+    viewerContainer = document.querySelector('.viewer-container');
+    viewerDropMsg = document.getElementById('viewerDropMsg');
+    zoomInBtn = document.getElementById('zoomInBtn');
+    zoomOutBtn = document.getElementById('zoomOutBtn');
+    zoomFitBtn = document.getElementById('zoomFitBtn');
+    zoomActualBtn = document.getElementById('zoomActualBtn');
+    prevPageBtn = document.getElementById('prevPageBtn');
+    nextPageBtn = document.getElementById('nextPageBtn');
+    searchToggleBtn = document.getElementById('searchToggleBtn');
+    findPrevBtn = document.getElementById('findPrevBtn');
+    findNextBtn = document.getElementById('findNextBtn');
+    clearSearchBtn = document.getElementById('clearSearchBtn');
+    clearAllBtn = document.getElementById('clearAllBtn');
+    mobileToggleBtn = document.getElementById('mobileToggleBtn');
+    calibrateScaleBtn = document.getElementById('calibrateScaleBtn');
+    measureDistBtn = document.getElementById('measureDistBtn');
+    measurePerimBtn = document.getElementById('measurePerimBtn');
+    measureAreaBtn = document.getElementById('measureAreaBtn');
+    clearMeasureBtn = document.getElementById('clearMeasureBtn');
+    scaleInput = document.getElementById('scaleInput');
+    progressBar = document.getElementById('progressBarFill');
 }
-
-initProgressBar();
-
-const _proxyStyle = {};
-Object.defineProperty(_proxyStyle, 'width', {
-    set(v) {
-        const pct = parseInt(v) / 100;
-        if (!isNaN(pct) && _progressPb) {
-            if (pct <= 0) _progressPb.set(0);
-            else { const a = _progressPb.animate(pct); if (a && a.catch) a.catch(() => {}); }
-        }
-    }
-});
-export const progressBar = { style: _proxyStyle };
-export const sidebar = document.getElementById('sidebar');
-export const statusBar = document.getElementById('statusBar');
-export const verboseStatusBar = document.getElementById('verboseStatusBar');
-export const globalSearchInput = document.getElementById('globalSearchInput');
-export const gsPrevBtn = document.getElementById('gsPrevBtn');
-export const gsNextBtn = document.getElementById('gsNextBtn');
-export const folderInput = document.getElementById('folderInput');
-export const keywordManager = document.getElementById('keywordManager');
-export const keywordInput = document.getElementById('keywordInput');
-export const listSelector = document.getElementById('listSelector');
-export const keywordListSelect = document.getElementById('keywordListSelect');
-export const newListDialog = document.getElementById('newListDialog');
-export const newListName = document.getElementById('newListName');
-export const deleteListBtn = document.getElementById('deleteListBtn');
-export const listInfo = document.getElementById('listInfo');
-export const settingsBtn = document.getElementById('settingsBtn');
-export const resizer = document.getElementById('resizer');
-export const viewerContainer = document.querySelector('.viewer-container');
-export const viewerDropMsg = document.getElementById('viewerDropMsg');

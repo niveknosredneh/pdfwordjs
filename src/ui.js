@@ -3,6 +3,7 @@ import * as dom from './dom.js';
 import { fn } from './cross.js';
 import * as ocr from './ocr.js';
 import * as measure from './measure.js';
+import * as keywords from './keywords.js';
 
 state.renderQuality = window.localStorage.getItem('pdf_render_quality') || 'medium';
 state.smoothScrollEnabled = false;
@@ -13,12 +14,13 @@ state.settingsJustToggled = false;
 let searchOverlay = null;
 let searchOverlayInput = null;
 let searchOverlayResults = null;
+let searchPreviousFocus = null;
 let customSearchResults = [];
 let customSearchIndex = 0;
 
 export function clearSearch() {
+    state.allKeywordMode = false;
     state.globalSearchActiveDoc = '';
-    state.globalSearchDocResults = [];
     state.globalSearchDocIndex = 0;
     state.activeKeyword = '';
     state.searchResults = [];
@@ -30,8 +32,9 @@ export function clearSearch() {
     dom.keywordSelect.value = '';
     dom.matchInput.value = '';
     dom.matchTotal.textContent = '0';
-    fn.updateSidebarBadge();
-    fn.renderPageHeatmaps();
+    state.emit('badge-changed');
+    state.emit('heatmaps-changed');
+    updateToolbarState();
 }
 
 export function clearAllResults() {
@@ -72,7 +75,7 @@ export function clearAllResults() {
     state.totalDocsFound = 0;
     state.docDataCache = {};
     state.totalCacheSize = 0;
-    fn.updateStats();
+    state.emit('stats-changed');
 
     state.pdfDoc = null;
     state.currentDocUrl = '';
@@ -101,9 +104,9 @@ function initSearchOverlay() {
     overlay.className = 'search-overlay';
     overlay.innerHTML = '<input type="text" id="searchOverlayInput" placeholder="Search PDF... (Esc to close)" autocomplete="off">'
         + '<span class="search-overlay-results" id="searchOverlayResults">0 / 0</span>'
-        + '<button class="search-overlay-btn" id="searchOverlayPrev" title="Previous (Shift+F3)">&#8592;</button>'
-        + '<button class="search-overlay-btn" id="searchOverlayNext" title="Next (F3)">&#8594;</button>'
-        + '<button class="search-overlay-btn search-overlay-close" id="searchOverlayClose" title="Close (Esc)">&#10005;</button>';
+        + '<button class="search-overlay-btn" id="searchOverlayPrev" title="Previous (Shift+F3)" aria-label="Previous (Shift+F3)">&#8592;</button>'
+        + '<button class="search-overlay-btn" id="searchOverlayNext" title="Next (F3)" aria-label="Next (F3)">&#8594;</button>'
+        + '<button class="search-overlay-btn search-overlay-close" id="searchOverlayClose" title="Close (Esc)" aria-label="Close (Esc)">&#10005;</button>';
     document.querySelector('.viewer-container').appendChild(overlay);
     searchOverlay = overlay;
     searchOverlayInput = document.getElementById('searchOverlayInput');
@@ -126,6 +129,7 @@ function updateHeatmap() {}
 
 export function showSearchOverlay() {
     if (!searchOverlay) initSearchOverlay();
+    searchPreviousFocus = document.activeElement;
     searchOverlay.classList.add('visible');
     searchOverlayInput.value = '';
     searchOverlayInput.focus();
@@ -151,6 +155,10 @@ export function closeSearchOverlay() {
     clearCustomHighlights();
     customSearchResults = [];
     customSearchIndex = 0;
+    if (searchPreviousFocus) {
+        searchPreviousFocus.focus();
+        searchPreviousFocus = null;
+    }
 }
 
 function performCustomSearch(query) {
@@ -335,139 +343,53 @@ export function toggleTheme() {
         html.setAttribute('data-theme', 'light');
         localStorage.setItem('pdf_theme', 'light');
     }
-    const btn = document.querySelector('#settingsMenu button[data-btn=theme]');
-    if (btn) btn.textContent = html.getAttribute('data-theme') === 'light' ? 'Dark Mode' : 'Light Mode';
+    if (dom.settingsThemeBtn) {
+        dom.settingsThemeBtn.innerHTML = '&#9728; ' + (html.getAttribute('data-theme') === 'light' ? 'Dark Mode' : 'Light Mode');
+    }
     setTimeout(() => html.classList.remove('transitioning'), 850);
+}
+
+function updateSettingsMenu() {
+    const html = document.documentElement;
+    const isLight = html.getAttribute('data-theme') === 'light';
+    dom.settingsThemeBtn.innerHTML = '&#9728; ' + (isLight ? 'Dark Mode' : 'Light Mode');
+    dom.settingsAnimateBtn.classList.toggle('on', state.smoothScrollEnabled);
+    const stateEl = dom.settingsAnimateBtn.querySelector('.toggle-state');
+    if (stateEl) stateEl.textContent = state.smoothScrollEnabled ? 'ON' : 'OFF';
+    dom.settingsMenu.querySelectorAll('.settings-menu-quality-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.quality === state.renderQuality);
+    });
+}
+
+function closeSettings() {
+    dom.settingsMenu.classList.remove('visible');
+    state.settingsOpen = false;
+    document.removeEventListener('click', closeSettingsOnClickOutside);
+    if (state._settingsPreviousFocus) {
+        state._settingsPreviousFocus.focus();
+        state._settingsPreviousFocus = null;
+    }
 }
 
 export function toggleSettings(e) {
     if (e) e.stopPropagation();
     state.settingsOpen = !state.settingsOpen;
 
-    const existing = document.getElementById('settingsMenu');
     if (!state.settingsOpen) {
-        if (existing) existing.remove();
+        closeSettings();
         return;
     }
-    if (existing) existing.remove();
 
+    state._settingsPreviousFocus = document.activeElement;
     state.settingsJustToggled = true;
-
     const rect = dom.settingsBtn.getBoundingClientRect();
+    dom.settingsMenu.style.left = rect.left + 'px';
+    dom.settingsMenu.style.top = (rect.bottom + 4) + 'px';
+    updateSettingsMenu();
+    dom.settingsMenu.classList.add('visible');
 
-    const menu = document.createElement('div');
-    menu.id = 'settingsMenu';
-    menu.className = 'settings-menu';
-    menu.style.cssText = 'display:flex;position:fixed;left:' + rect.left + 'px;top:' + (rect.bottom + 4) + 'px;flex-direction:column;gap:6px';
-
-    const btnStyle = 'padding:6px 8px;font-size:0.75rem;border:1px solid var(--grey-600);border-radius:4px;cursor:pointer;background:transparent;color:var(--grey-300)';
-
-    const kwBtn = document.createElement('button');
-    kwBtn.textContent = '\u2699 Manage Keywords';
-    kwBtn.style.cssText = btnStyle;
-    kwBtn.onclick = () => {
-        const m = document.getElementById('settingsMenu');
-        if (m) m.remove();
-        state.settingsOpen = false;
-        window.toggleKeywordManager();
-    };
-    menu.appendChild(kwBtn);
-
-    const themeBtn = document.createElement('button');
-    const html = document.documentElement;
-    themeBtn.innerHTML = '&#9728; ' + (html.getAttribute('data-theme') === 'light' ? 'Dark Mode' : 'Light Mode');
-    themeBtn.style.cssText = btnStyle;
-    themeBtn.dataset.btn = 'theme';
-    themeBtn.onclick = toggleTheme;
-    menu.appendChild(themeBtn);
-
-    const animateBtn = document.createElement('button');
-    animateBtn.className = 'toggle-btn' + (state.smoothScrollEnabled ? ' on' : '');
-    animateBtn.style.cssText = btnStyle;
-    animateBtn.onclick = function() {
-        this.classList.toggle('on');
-        toggleAnimate();
-    };
-
-    const label = document.createElement('span');
-    label.className = 'toggle-label';
-    label.textContent = 'Animate PDF Scroll ';
-    animateBtn.appendChild(label);
-
-    const stateEl = document.createElement('span');
-    stateEl.className = 'toggle-state';
-    stateEl.textContent = state.smoothScrollEnabled ? 'ON' : 'OFF';
-    animateBtn.appendChild(stateEl);
-
-    menu.appendChild(animateBtn);
-
-    const qualitySection = document.createElement('div');
-    qualitySection.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:4px;padding-top:8px;border-top:1px solid var(--grey-600)';
-
-    const qualityLabel = document.createElement('span');
-    qualityLabel.className = 'toggle-label';
-    qualityLabel.textContent = 'Render Quality:';
-    qualitySection.appendChild(qualityLabel);
-
-    const qualityBtns = document.createElement('div');
-    qualityBtns.style.cssText = 'display:flex;gap:4px';
-
-    const qOpts = [
-        { key: 'quality', label: 'Quality' },
-        { key: 'medium', label: 'Medium' },
-        { key: 'fast', label: 'Fast' },
-    ];
-    qOpts.forEach(({ key, label }) => {
-        const btn = document.createElement('button');
-        btn.textContent = label;
-        btn.style.cssText = 'flex:1;padding:6px 8px;font-size:0.75rem;border:1px solid var(--grey-600);border-radius:4px;cursor:pointer;'
-            + 'background:' + (state.renderQuality === key ? 'var(--green)' : 'transparent') + ';'
-            + 'color:' + (state.renderQuality === key ? 'white' : 'var(--grey-300)');
-        btn.onclick = () => {
-            state.settingsJustToggled = true;
-            fn.setRenderQuality(key);
-            qualityBtns.querySelectorAll('button').forEach(b => {
-                const isSelected = b.textContent === label;
-                b.style.background = isSelected ? 'var(--green)' : 'transparent';
-                b.style.color = isSelected ? 'white' : 'var(--grey-300)';
-            });
-        };
-        qualityBtns.appendChild(btn);
-    });
-
-    qualitySection.appendChild(qualityBtns);
-    menu.appendChild(qualitySection);
-
-    const githubSection = document.createElement('div');
-    githubSection.style.cssText = 'margin-top:4px;padding-top:8px;border-top:1px solid var(--grey-600);display:flex;justify-content:center';
-
-    const githubLink = document.createElement('a');
-    githubLink.href = 'https://github.com/kvnhndrsn/kwpdf';
-    githubLink.target = '_blank';
-    githubLink.rel = 'noopener noreferrer';
-    githubLink.style.cssText = 'display:flex;align-items:center;gap:6px;color:var(--grey-300);text-decoration:none;font-size:0.8rem';
-
-    const githubIcon = document.createElement('img');
-    githubIcon.src = 'icons/github.svg';
-    githubIcon.alt = 'GitHub';
-    githubIcon.style.cssText = 'width:16px;height:16px;filter:brightness(0) invert(0.7)';
-
-    githubLink.onmouseenter = () => {
-        githubLink.style.color = 'var(--green-light)';
-        githubIcon.style.filter = 'brightness(0) invert(0.85) saturate(1.5) hue-rotate(80deg)';
-    };
-    githubLink.onmouseleave = () => {
-        githubLink.style.color = 'var(--grey-300)';
-        githubIcon.style.filter = 'brightness(0) invert(0.7)';
-    };
-
-    githubLink.appendChild(githubIcon);
-    githubLink.appendChild(document.createTextNode('source code on GitHub'));
-
-    githubSection.appendChild(githubLink);
-    menu.appendChild(githubSection);
-
-    document.body.appendChild(menu);
+    const firstFocusable = dom.settingsMenu.querySelector('button, a, input, select');
+    if (firstFocusable) firstFocusable.focus();
 
     setTimeout(() => {
         document.addEventListener('click', closeSettingsOnClickOutside);
@@ -475,23 +397,20 @@ export function toggleSettings(e) {
 }
 
 function closeSettingsOnClickOutside(e) {
-    const menu = document.getElementById('settingsMenu');
     if (state.settingsJustToggled) {
         state.settingsJustToggled = false;
         return;
     }
-    if (menu && !menu.contains(e.target) && e.target !== dom.settingsBtn) {
-        menu.remove();
-        state.settingsOpen = false;
-        document.removeEventListener('click', closeSettingsOnClickOutside);
+    if (!dom.settingsMenu.contains(e.target) && e.target !== dom.settingsBtn) {
+        closeSettings();
     }
 }
 
 function toggleAnimate() {
     state.smoothScrollEnabled = !state.smoothScrollEnabled;
     localStorage.setItem('pdf_smooth_scroll', state.smoothScrollEnabled);
-    const label = document.querySelector('.toggle-state');
-    if (label) label.textContent = state.smoothScrollEnabled ? 'ON' : 'OFF';
+    const stateEl = dom.settingsAnimateBtn?.querySelector('.toggle-state');
+    if (stateEl) stateEl.textContent = state.smoothScrollEnabled ? 'ON' : 'OFF';
 }
 
 export function closeMobileSidebar() {
@@ -578,10 +497,43 @@ function scrollToPage(pageNum) {
 export function updatePageInfo() {
     dom.pageInput.value = state.currentPage;
     dom.pageInput.placeholder = state.totalPages > 0 ? state.currentPage : '0';
+    updateToolbarState();
 }
 
 export function updateZoomDisplay() {
     dom.zoomLevelEl.textContent = Math.round(state.currentScale * 100) + '%';
+    updateToolbarState();
+}
+
+export function updateToolbarState() {
+    const hasDoc = !!state.currentDocUrl;
+    const hasDocx = state.currentDocType !== 'pdf' && hasDoc;
+    const hasPdf = state.currentDocType === 'pdf' && hasDoc;
+
+    dom.zoomOutBtn.disabled = !hasDoc || state.currentScale <= 0.5;
+    dom.zoomInBtn.disabled = !hasDoc || state.currentScale >= 4.0;
+    dom.zoomFitBtn.disabled = !hasPdf;
+    dom.zoomActualBtn.disabled = !hasDoc;
+
+    dom.prevPageBtn.disabled = !hasDoc || state.currentPage <= 1;
+    dom.nextPageBtn.disabled = !hasDoc || state.currentPage >= state.totalPages;
+    dom.pageInput.disabled = !hasDoc;
+
+    const hasResults = (state.currentDocType === 'pdf' ? state.searchResults.length : state.docSearchResults.length) > 0;
+
+    dom.searchToggleBtn.disabled = !hasDoc;
+    dom.keywordSelect.disabled = !hasResults;
+    dom.findPrevBtn.disabled = !hasResults;
+    dom.findNextBtn.disabled = !hasResults;
+    dom.clearSearchBtn.disabled = !hasResults && !state.activeKeyword;
+    dom.matchInput.disabled = !hasResults;
+
+    dom.calibrateScaleBtn.disabled = !hasDoc;
+    dom.measureDistBtn.disabled = !hasDoc;
+    dom.measurePerimBtn.disabled = !hasDoc;
+    dom.measureAreaBtn.disabled = !hasDoc;
+    dom.clearMeasureBtn.disabled = !document.querySelector('.measure-line');
+    dom.scaleInput.disabled = !hasDoc;
 }
 
 export function goToMatch(index) {
@@ -589,7 +541,7 @@ export function goToMatch(index) {
 
     state.currentMatchIndex = ((index % state.searchResults.length) + state.searchResults.length) % state.searchResults.length;
     dom.matchInput.value = state.currentMatchIndex + 1;
-    fn.updateSidebarBadge();
+    state.emit('badge-changed');
     updateHeatmap();
 
     const result = state.searchResults[state.currentMatchIndex];
@@ -606,6 +558,7 @@ export function goToMatch(index) {
     });
 
     fn.startPrerender();
+    updateToolbarState();
 }
 
 export function findNext() {
@@ -613,6 +566,7 @@ export function findNext() {
         goToMatch(state.currentMatchIndex + 1);
     } else if (state.docSearchResults.length > 0) {
         fn.goToDocMatch(state.docCurrentMatchIndex + 1);
+        updateToolbarState();
     }
 }
 
@@ -621,6 +575,7 @@ export function findPrev() {
         goToMatch(state.currentMatchIndex - 1);
     } else if (state.docSearchResults.length > 0) {
         fn.goToDocMatch(state.docCurrentMatchIndex - 1);
+        updateToolbarState();
     }
 }
 
@@ -646,6 +601,80 @@ function getTouchDist(e) {
 
 export function setupEventListeners() {
     window.addEventListener('resize', checkMobileLayout);
+
+    /* Toolbar & sidebar buttons */
+    dom.zoomOutBtn?.addEventListener('click', zoomOut);
+    dom.zoomInBtn?.addEventListener('click', zoomIn);
+    dom.zoomFitBtn?.addEventListener('click', zoomFit);
+    dom.zoomActualBtn?.addEventListener('click', zoomActual);
+    dom.prevPageBtn?.addEventListener('click', prevPage);
+    dom.nextPageBtn?.addEventListener('click', nextPage);
+    dom.searchToggleBtn?.addEventListener('click', showSearchOverlay);
+    dom.findPrevBtn?.addEventListener('click', findPrev);
+    dom.findNextBtn?.addEventListener('click', findNext);
+    dom.clearSearchBtn?.addEventListener('click', clearSearch);
+    dom.clearAllBtn?.addEventListener('click', clearAllResults);
+    dom.kwManageBtn?.addEventListener('click', (e) => {
+        keywords.toggleKeywordManager(e);
+    });
+    dom.settingsBtn?.addEventListener('click', toggleSettings);
+    dom.mobileToggleBtn?.addEventListener('click', toggleMobileSidebar);
+
+    /* Settings menu buttons */
+    dom.settingsKwBtn?.addEventListener('click', () => {
+        toggleSettings();
+        keywords.toggleKeywordManager();
+    });
+    dom.settingsThemeBtn?.addEventListener('click', () => {
+        toggleTheme();
+        updateSettingsMenu();
+    });
+    dom.settingsAnimateBtn?.addEventListener('click', function() {
+        this.classList.toggle('on');
+        toggleAnimate();
+    });
+    dom.settingsMenu?.addEventListener('click', (e) => {
+        const qualityBtn = e.target.closest('.settings-menu-quality-btn');
+        if (!qualityBtn) return;
+        state.settingsJustToggled = true;
+        fn.setRenderQuality(qualityBtn.dataset.quality);
+        dom.settingsMenu.querySelectorAll('.settings-menu-quality-btn').forEach(b => {
+            b.classList.toggle('active', b === qualityBtn);
+        });
+    });
+
+    initGlobalSearch();
+
+    dom.statusBar.innerHTML = '<span>Ready</span><span>#__BUNDLE_HASH__ __COMMIT_DATE__</span>';
+    updateToolbarState();
+
+    /* Measurement toolbar buttons */
+    dom.calibrateScaleBtn?.addEventListener('click', () => {
+        measure.startCalibration();
+        updateMeasureUI();
+    });
+    dom.measureDistBtn?.addEventListener('click', () => {
+        const tool = measure.getActiveTool();
+        if (tool === 'distance') measure.deactivateTool();
+        else measure.activateTool('distance');
+        updateMeasureUI();
+    });
+    dom.measurePerimBtn?.addEventListener('click', () => {
+        const tool = measure.getActiveTool();
+        if (tool === 'perimeter') measure.deactivateTool();
+        else measure.activateTool('perimeter');
+        updateMeasureUI();
+    });
+    dom.measureAreaBtn?.addEventListener('click', () => {
+        const tool = measure.getActiveTool();
+        if (tool === 'area') measure.deactivateTool();
+        else measure.activateTool('area');
+        updateMeasureUI();
+    });
+    dom.clearMeasureBtn?.addEventListener('click', () => {
+        measure.clearAllMeasurements();
+        updateMeasureUI();
+    });
 
     dom.viewerScroll.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
@@ -684,12 +713,21 @@ export function setupEventListeners() {
             e.preventDefault();
             if (searchOverlay && searchOverlay.classList.contains('visible')) customFindPrev();
         }
-        if (e.key === 'g' && !e.ctrlKey && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        if (e.key === 'g' && !e.ctrlKey && !/^(INPUT|TEXTAREA|SELECT)$/i.test(document.activeElement.tagName) && document.activeElement.getAttribute('contenteditable') !== 'true') {
             e.preventDefault();
             dom.pageInput.focus();
             dom.pageInput.select();
         }
         if (e.key === 'Escape') {
+            if (state.settingsOpen) {
+                closeSettings();
+                return;
+            }
+            const kwMenu = document.getElementById('keywordMenu');
+            if (kwMenu && kwMenu.classList.contains('visible')) {
+                keywords.toggleKeywordManager();
+                return;
+            }
             dom.pageInput.blur();
             dom.matchInput.blur();
             closeMobileSidebar();
@@ -731,10 +769,11 @@ export function setupEventListeners() {
         else if (state.docSearchResults.length > 0) dom.matchInput.value = state.docCurrentMatchIndex + 1;
     });
 
-    dom.keywordSelect.addEventListener('change', () => {
+    dom.keywordSelect.addEventListener('change', async () => {
         if (dom.keywordSelect.value) {
-            if (state.currentDocType === 'pdf') fn.performSearch(dom.keywordSelect.value);
-            else fn.performDocSearch(dom.keywordSelect.value);
+            if (state.currentDocType === 'pdf') await fn.performSearch(dom.keywordSelect.value);
+            else await fn.performDocSearch(dom.keywordSelect.value);
+            updateToolbarState();
         }
     });
 
@@ -802,42 +841,40 @@ export function setupEventListeners() {
         }, false);
     });
 
-    const scaleInput = document.getElementById('scaleInput');
-    if (scaleInput) {
+    if (dom.scaleInput) {
         const updateScale = () => {
             if (measure.getIsCalibrating()) {
-                const val = scaleInput.value.trim();
+                const val = dom.scaleInput.value.trim();
                 if (val && !isNaN(parseFloat(val))) {
-                    // valid number for calibration, keep as-is
                 } else {
-                    scaleInput.value = '';
+                    dom.scaleInput.value = '';
                 }
                 return;
             }
-            const numStr = scaleInput.value.replace(/.*:/, '').replace(/[^0-9.]/g, '');
+            const numStr = dom.scaleInput.value.replace(/.*:/, '').replace(/[^0-9.]/g, '');
             const parsed = parseFloat(numStr);
             if (!isNaN(parsed) && parsed >= 0.001) {
-                scaleInput.value = '1:' + parsed;
+                dom.scaleInput.value = '1:' + parsed;
                 measure.setScale(parsed);
                 measure.renderAllMeasurements();
             }
         };
-        scaleInput.addEventListener('change', updateScale);
-        scaleInput.addEventListener('blur', updateScale);
-        scaleInput.addEventListener('focus', () => {
+        dom.scaleInput.addEventListener('change', updateScale);
+        dom.scaleInput.addEventListener('blur', updateScale);
+        dom.scaleInput.addEventListener('focus', () => {
             if (measure.getIsCalibrating()) {
-                scaleInput.select();
+                dom.scaleInput.select();
             } else {
-                scaleInput.value = '';
+                dom.scaleInput.value = '';
             }
         });
-        scaleInput.addEventListener('keydown', (e) => {
+        dom.scaleInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && measure.getIsCalibrating()) {
                 e.preventDefault();
-                scaleInput.blur();
+                dom.scaleInput.blur();
             }
         });
-        scaleInput.value = '1:' + measure.getScale();
+        dom.scaleInput.value = '1:' + measure.getScale();
     }
 
     dom.viewerScroll.addEventListener('click', (e) => {
@@ -857,16 +894,13 @@ export function setupEventListeners() {
 }
 
 export function updateMeasureUI() {
-    const distBtn = document.getElementById('measureDistBtn');
-    const perimBtn = document.getElementById('measurePerimBtn');
-    const areaBtn = document.getElementById('measureAreaBtn');
-    const calBtn = document.getElementById('calibrateScaleBtn');
     const active = measure.getActiveTool();
     const calibrating = measure.getIsCalibrating();
-    if (distBtn) distBtn.classList.toggle('active-tool', active === 'distance');
-    if (perimBtn) perimBtn.classList.toggle('active-tool', active === 'perimeter');
-    if (areaBtn) areaBtn.classList.toggle('active-tool', active === 'area');
-    if (calBtn) calBtn.classList.toggle('active-tool', calibrating);
+    dom.measureDistBtn?.classList.toggle('active-tool', active === 'distance');
+    dom.measurePerimBtn?.classList.toggle('active-tool', active === 'perimeter');
+    dom.measureAreaBtn?.classList.toggle('active-tool', active === 'area');
+    dom.calibrateScaleBtn?.classList.toggle('active-tool', calibrating);
+    updateToolbarState();
 }
 
 window.addEventListener('beforeunload', () => {
@@ -875,8 +909,6 @@ window.addEventListener('beforeunload', () => {
         state.objectUrls = [];
     }
 });
-
-dom.statusBar.innerHTML = '<span>Ready</span><span>#__BUNDLE_HASH__ __COMMIT_DATE__</span>';
 
 (function initTheme() {
     const savedTheme = localStorage.getItem('pdf_theme');
@@ -948,6 +980,41 @@ export function activateGlobalSearch(navigateToLast) {
     }
 }
 
+function _findCustomResultAfterScroll() {
+    const scrollTop = dom.viewerScroll.scrollTop;
+    const viewportCenter = scrollTop + dom.viewerScroll.clientHeight / 2;
+    for (let i = 0; i < customSearchResults.length; i++) {
+        const r = customSearchResults[i];
+        const pageEl = document.getElementById('page-' + r.page);
+        if (!pageEl) continue;
+        const cached = state.textPageCache[r.page];
+        if (!cached || !cached.items) continue;
+        const coords = getTextCoords(cached, r.startIndex, r.endIndex);
+        if (!coords) continue;
+        const resultTop = pageEl.offsetTop + coords.startY * state.currentScale;
+        if (resultTop > viewportCenter + 5) return i;
+    }
+    return -1;
+}
+
+function _findCustomResultBeforeScroll() {
+    const scrollTop = dom.viewerScroll.scrollTop;
+    const viewportCenter = scrollTop + dom.viewerScroll.clientHeight / 2;
+    let bestIdx = -1;
+    for (let i = 0; i < customSearchResults.length; i++) {
+        const r = customSearchResults[i];
+        const pageEl = document.getElementById('page-' + r.page);
+        if (!pageEl) continue;
+        const cached = state.textPageCache[r.page];
+        if (!cached || !cached.items) continue;
+        const coords = getTextCoords(cached, r.startIndex, r.endIndex);
+        if (!coords) continue;
+        const resultTop = pageEl.offsetTop + coords.startY * state.currentScale;
+        if (resultTop < viewportCenter - 5) bestIdx = i;
+    }
+    return bestIdx;
+}
+
 export function cycleGlobalSearch() {
     if (state.currentDocUrl && state.docContentCache[state.currentDocUrl]) {
         fn.findNext();
@@ -957,7 +1024,12 @@ export function cycleGlobalSearch() {
     }
 
     if (customSearchResults.length > 0) {
-        customGoToMatch(customSearchIndex + 1);
+        const idx = _findCustomResultAfterScroll();
+        if (idx >= 0) {
+            customGoToMatch(idx);
+        } else {
+            customGoToMatch(customSearchIndex + 1);
+        }
         state.globalSearchDocIndex = customSearchIndex;
         state.globalSearchDocResults = [...customSearchResults];
     }
@@ -972,7 +1044,12 @@ export function cycleGlobalSearchPrev() {
     }
 
     if (customSearchResults.length > 0) {
-        customGoToMatch(customSearchIndex - 1);
+        const idx = _findCustomResultBeforeScroll();
+        if (idx >= 0) {
+            customGoToMatch(idx);
+        } else {
+            customGoToMatch(customSearchIndex - 1);
+        }
         state.globalSearchDocIndex = customSearchIndex;
         state.globalSearchDocResults = [...customSearchResults];
     }
@@ -995,23 +1072,30 @@ function _gsNavigate(dir) {
 
     if (docUrls.length === 0) return;
 
-    const hasResults = state.globalSearchDocResults.length > 0;
-    const atEnd = state.globalSearchDocIndex >= state.globalSearchDocResults.length - 1;
-    const atStart = state.globalSearchDocIndex <= 0;
-
-    if (hasResults) {
-        if (dir > 0 && !atEnd) {
-            cycleGlobalSearch();
-            fn.renderResultsArea();
-            return;
-        }
-        if (dir < 0 && !atStart) {
-            cycleGlobalSearchPrev();
-            fn.renderResultsArea();
-            return;
-        }
+    // Detect if we're at the start/end of results in the current file
+    let atEnd = false, atStart = false;
+    if (state.currentDocUrl && state.docContentCache[state.currentDocUrl]) {
+        atEnd = state.docCurrentMatchIndex >= state.docSearchResults.length - 1;
+        atStart = state.docCurrentMatchIndex <= 0;
+    } else if (customSearchResults.length > 0) {
+        atEnd = customSearchIndex >= customSearchResults.length - 1;
+        atStart = customSearchIndex <= 0;
+    } else {
+        atEnd = atStart = true;
     }
 
+    if (dir > 0 && !atEnd) {
+        cycleGlobalSearch();
+        state.emit('results-changed');
+        return;
+    }
+    if (dir < 0 && !atStart) {
+        cycleGlobalSearchPrev();
+        state.emit('results-changed');
+        return;
+    }
+
+    // No more results in current file — jump to next/prev file
     if (state._gsPos < 0) {
         state._gsPos = dir > 0 ? 0 : docUrls.length - 1;
     } else {
@@ -1032,8 +1116,8 @@ export function performGlobalSearch(query) {
     if (!trimmed) {
         state.globalSearchQuery = '';
         state.globalSearchResults = {};
-        fn.updateStats();
-        fn.renderResultsArea();
+        state.emit('stats-changed');
+        state.emit('results-changed');
         return;
     }
 
@@ -1098,7 +1182,7 @@ export function performGlobalSearch(query) {
                 dom.statusBar.textContent = `No matches for "${trimmed}"`;
             }
 
-            fn.renderResultsArea();
+            state.emit('results-changed');
         }
     }
 
@@ -1121,7 +1205,7 @@ function _gsJumpToDoc(url, navigateToLast) {
             _gsPendingUrl = null;
             state.globalSearchActiveDoc = url;
             activateGlobalSearch(navigateToLast);
-            fn.renderResultsArea();
+            state.emit('results-changed');
         } else {
             setTimeout(poll, 200);
         }
@@ -1157,6 +1241,10 @@ function initGlobalSearch() {
 
     dom.gsPrevBtn.addEventListener('click', () => _gsNavigate(-1));
     dom.gsNextBtn.addEventListener('click', () => _gsNavigate(1));
-}
 
-initGlobalSearch();
+    dom.gsClearBtn.addEventListener('click', () => {
+        dom.globalSearchInput.value = '';
+        dom.globalSearchInput.focus();
+        performGlobalSearch('');
+    });
+}

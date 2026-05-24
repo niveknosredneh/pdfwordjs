@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import * as dom from './dom.js';
-import { getKeywordRegex } from './keyword-regex.js';
-import { fn } from './cross.js';
+import { getKeywordRegex, normalizeKeywordMatch } from './keyword-regex.js';
+import { fn, KEYWORDS } from './cross.js';
 
 state.searchCache = {};
 state.docSearchResults = [];
@@ -197,32 +197,57 @@ function startDocSearchComputation() {
     const cached = state.docContentCache[state.currentDocUrl];
     if (!cached) return;
 
-    const combinedRegex = getKeywordRegex(window.KEYWORDS);
+    const combinedRegex = getKeywordRegex(KEYWORDS);
     const text = cached.text;
     const results = [];
     let match;
 
     while ((match = combinedRegex.exec(text)) !== null) {
-        if (match[0].length < 3) continue;
-        if (!/[a-zA-Z]/.test(match[0])) continue;
+        const key = normalizeKeywordMatch(match, KEYWORDS);
+        if (!key) continue;
         const page = state._docPageOffsets ? findPageForIndex(match.index, state._docPageOffsets) : 1;
-        results.push({ index: match.index, text: match[0], length: match[0].length, page });
+        results.push({ index: match.index, text: match[0], length: match[0].length, page, keyword: key });
     }
 
     const counts = {};
     results.forEach(r => {
-        const lower = r.text.toLowerCase();
-        const key = (window.KEYWORDS || []).find(k => k.toLowerCase() === lower) || lower;
-        counts[key] = (counts[key] || 0) + 1;
+        counts[r.keyword] = (counts[r.keyword] || 0) + 1;
     });
 
     state.searchCache._docCounts = counts;
     state.searchCache._docResults = results;
-    fn.populateKeywordSelect();
+    state.emit('keywords-changed');
+}
+
+export function cycleAllDocKeywords() {
+    const allResults = state.searchCache._docResults;
+    if (!allResults || allResults.length === 0) return;
+
+    const wasAlreadyAll = state.allKeywordMode && state.docSearchResults.length === allResults.length;
+
+    state.allKeywordMode = true;
+    state.activeKeyword = '';
+    state.docSearchResults = allResults;
+
+    if (wasAlreadyAll) {
+        state.docCurrentMatchIndex = (state.docCurrentMatchIndex + 1) % allResults.length;
+    } else {
+        state.docCurrentMatchIndex = 0;
+    }
+
+    dom.navGroup.classList.add('active');
+    dom.navSep.style.display = '';
+    dom.matchTotal.textContent = allResults.length;
+    dom.matchInput.max = allResults.length;
+    dom.matchInput.value = state.docCurrentMatchIndex + 1;
+    renderDocHighlights();
+    state.emit('badge-changed');
+    goToDocMatch(state.docCurrentMatchIndex);
 }
 
 export function performDocSearch(query) {
     if (!state.currentDocUrl || !state.docContentCache[state.currentDocUrl]) return;
+    state.allKeywordMode = false;
 
     const cached = state.docContentCache[state.currentDocUrl];
     const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -246,7 +271,7 @@ export function performDocSearch(query) {
         dom.matchInput.max = results.length;
         dom.matchInput.value = 1;
         renderDocHighlights();
-        fn.updateSidebarBadge();
+        state.emit('badge-changed');
         goToDocMatch(0);
     } else {
         dom.navGroup.classList.remove('active');
@@ -258,6 +283,7 @@ export function performDocSearch(query) {
 
 export function cycleDocSearch(query) {
     if (!state.currentDocUrl || !state.docContentCache[state.currentDocUrl]) return;
+    state.allKeywordMode = false;
 
     const cached = state.docContentCache[state.currentDocUrl];
     const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -285,7 +311,7 @@ export function cycleDocSearch(query) {
     dom.matchInput.max = results.length;
     dom.matchInput.value = state.docCurrentMatchIndex + 1;
     renderDocHighlights();
-    fn.updateSidebarBadge();
+    state.emit('badge-changed');
     goToDocMatch(state.docCurrentMatchIndex);
 }
 
@@ -367,7 +393,7 @@ export function goToDocMatch(index) {
 
     state.docCurrentMatchIndex = ((index % state.docSearchResults.length) + state.docSearchResults.length) % state.docSearchResults.length;
     dom.matchInput.value = state.docCurrentMatchIndex + 1;
-    fn.updateSidebarBadge();
+    state.emit('badge-changed');
 
     const result = state.docSearchResults[state.docCurrentMatchIndex];
     const pageNum = result.page || 1;

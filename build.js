@@ -32,6 +32,8 @@ const bundleHash = crypto.createHash('md5')
 
 let bundle = fs.readFileSync(path.join(dist, 'bundle.js'), 'utf8');
 bundle = bundle.replaceAll('__BUNDLE_HASH__', bundleHash).replaceAll('__COMMIT_DATE__', commitDate);
+bundle = bundle.replaceAll('"src/doc_processor_worker.js"', '"utils/doc_processor_worker.js"')
+               .replaceAll('"src/ocr_worker.js?h=', '"utils/ocr_worker.js?h=');
 fs.writeFileSync(path.join(dist, 'bundle.js'), bundle);
 
 function copy(src, dest) { fs.cpSync(path.join(__dirname, src), path.join(dist, dest), { recursive: true }); }

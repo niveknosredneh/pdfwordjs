@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import * as dom from './dom.js';
-import { fn } from './cross.js';
+import { fn, pdfjsLib } from './cross.js';
 import { evictCaches } from './file-handler.js';
 import { setScale, autoDetectScale } from './measure.js';
 import { processTextContent } from './pdf-search.js';
@@ -53,7 +53,7 @@ function loadPDF(fileUrl, keyword = '') {
 
     (async () => {
         try {
-            state.pdfDoc = await window.pdfjsLib.getDocument(fileUrl).promise;
+            state.pdfDoc = await pdfjsLib.getDocument(fileUrl).promise;
             state.currentDocUrl = fileUrl;
             state.totalPages = state.pdfDoc.numPages;
 
@@ -112,9 +112,9 @@ function loadPDF(fileUrl, keyword = '') {
                 for (let i = 0; i < cached.pages.length; i++) {
                     state.textPageCache[i + 1] = cached.pages[i];
                 }
-                state._gsPageCacheReady = true;
                 dom.loaderProgressFill.style.width = '80%';
                 await fn.precomputeAllSearches();
+                state._gsPageCacheReady = true;
 
                 // Populate sidebar keyword counts from search results
                 const counts = {};
@@ -143,10 +143,10 @@ function loadPDF(fileUrl, keyword = '') {
             dom.pageInput.max = state.totalPages;
             dom.pageTotal.textContent = state.totalPages;
 
-            fn.renderPageHeatmaps();
+            state.emit('heatmaps-changed');
             fn.refreshAllMeasurements();
 
-            fn.renderResultsArea();
+            state.emit('results-changed');
 
             if (keyword) fn.performSearch(keyword);
         } catch (err) {

@@ -11,6 +11,7 @@ const LOW_RES_SCALE = 0.2;
 
 let renderGen = 0;
 let _rendering = false;
+let _needsRefresh = false;
 
 // ── initialization ──
 
@@ -66,8 +67,9 @@ function setupPageObserver() {
     if (state.pageObserver) state.pageObserver.disconnect();
 
     state.pageObserver = new IntersectionObserver(() => {
+        if (_rendering) { _needsRefresh = true; return; }
         refreshVisiblePages();
-    }, { root: dom.viewerScroll, rootMargin: '800px' });
+    }, { root: dom.viewerScroll, rootMargin: '1200px' });
 
     document.querySelectorAll('[id^="page-"]').forEach(el => state.pageObserver.observe(el));
 }
@@ -166,7 +168,13 @@ async function refreshVisiblePages() {
         await renderPageNow(p.pn).catch(() => {});
         await new Promise(r => setTimeout(r, 0));
     }
-} finally { _rendering = false; }
+} finally {
+    _rendering = false;
+    if (_needsRefresh) {
+        _needsRefresh = false;
+        refreshVisiblePages();
+    }
+}
 }
 
 // ── render a single page ──
@@ -276,7 +284,7 @@ function buildTextLayer(el, pageNum, renderScale, displayHeight) {
         const fontSize = Math.sqrt(t[0] * t[0] + t[1] * t[1]) * renderScale;
         const itemH = (item.height || fontSize) * renderScale;
         const top = (displayHeight + offsetY * renderScale) - y - itemH;
-        span.style.cssText = 'position:absolute;left:' + x + 'px;top:' + top + 'px;font-size:' + fontSize + 'px;font-family:sans-serif;white-space:pre;color:transparent';
+        span.style.cssText = 'position:absolute;left:' + x + 'px;top:' + top + 'px;font-size:' + fontSize + 'px;white-space:pre;color:transparent';
         fragment.appendChild(span);
     }
     const textLayer = document.createElement('div');
@@ -365,7 +373,7 @@ export function setZoom(newScale, force = false) {
 
     fn.clearHighlights();
     if (state.searchResults.length > 0) fn.renderAllHighlights();
-    fn.renderPageHeatmaps();
+    state.emit('heatmaps-changed');
     fn.refreshAllMeasurements();
 
     requestAnimationFrame(() => {

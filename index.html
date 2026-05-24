@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=no">
+    <meta name="theme-color" content="#f5f5f5">
     <title>PDF Scanner</title>
     <link rel="stylesheet" href="dist/style.css">
     <link rel="manifest" href="dist/manifest.json">
     <link rel="icon" href="dist/icons/favicon.ico">
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/progressbar.js/1.1.0/progressbar.min.js"></script>
+    <link rel="preload" href="fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('service_worker.js')
@@ -21,27 +22,28 @@
 <div id="sidebar" class="sidebar">
     <div class="header">
         <div class="header-main-row">
-            <button class="btn-icon btn-icon-danger" onclick="clearAllResults()" title="Clear all">&#10005;</button>
-            <button class="btn-icon" id="settingsBtn" onclick="toggleSettings()" title="Settings">&#9881;</button>
+            <button class="btn-icon btn-icon-danger" id="clearAllBtn" title="Clear all" aria-label="Clear all">&#10005;</button>
+            <button class="btn-icon" id="settingsBtn" title="Settings" aria-label="Settings">&#9881;</button>
             <label class="btn-open">
                 <svg class="btn-open-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
                 Open Folder
                 <input type="file" id="folderInput" webkitdirectory directory multiple accept=".pdf,.docx,.doc" style="display:none">
             </label>
-            <button class="mobile-toggle-sidebar" onclick="toggleMobileSidebar()" title="Toggle sidebar" style="display:none;">☰</button>
+            <button class="mobile-toggle-sidebar" id="mobileToggleBtn" title="Toggle sidebar" aria-label="Toggle sidebar" style="display:none;">☰</button>
         </div>
         <div class="toolbar-section keyword-row">
-            <span class="progress-svg-wrap"></span>
             <select class="list-select" id="keywordListSelect" title="Keyword list"></select>
         </div>
         <div class="sidebar-search">
             <div class="sidebar-search-row">
                 <input type="text" id="globalSearchInput" class="global-search-input" placeholder="Search all files..." autocomplete="off">
-                <button class="btn-icon gs-nav-btn" id="gsPrevBtn" title="Previous match">&#8592;</button>
-                <button class="btn-icon gs-nav-btn" id="gsNextBtn" title="Next match">&#8594;</button>
+                <button class="btn-icon gs-nav-btn" id="gsPrevBtn" title="Previous match" aria-label="Previous match">&#8592;</button>
+                <button class="btn-icon gs-nav-btn" id="gsNextBtn" title="Next match" aria-label="Next match">&#8594;</button>
+                <button class="btn-icon gs-clear-btn" id="gsClearBtn" title="Clear search" aria-label="Clear search">&#10005;</button>
             </div>
         </div>
-        <div class="status-bar" id="statusBar"></div>
+        <div class="status-bar" id="statusBar" aria-live="polite"></div>
+        <div id="progressBar"><div id="progressBarFill"></div></div>
     </div>
 
     
@@ -68,42 +70,41 @@
 </div>
 
 
-</div>
-
 <div id="resizer"></div>
 
 <div class="viewer-container">
     <div class="viewer-toolbar">
         <div class="toolbar-section toolbar-zoom">
-            <button onclick="zoomOut()" title="Zoom Out (Ctrl+-)">-</button>
+            <button id="zoomOutBtn" title="Zoom Out (Ctrl+-)" aria-label="Zoom Out (Ctrl+-)">-</button>
             <span class="zoom-level" id="zoomLevel">100%</span>
-            <button onclick="zoomIn()" title="Zoom In (Ctrl++)">+</button>
-            <button onclick="zoomFit()" title="Fit Width">Fit</button>
-            <button onclick="zoomActual()" title="Actual Size">1:1</button>
+            <button id="zoomInBtn" title="Zoom In (Ctrl++)" aria-label="Zoom In (Ctrl++)">+</button>
+            <button id="zoomFitBtn" title="Fit Width" aria-label="Fit Width">Fit</button>
+            <button id="zoomActualBtn" title="Actual Size" aria-label="Actual Size">1:1</button>
         </div>
         <div class="toolbar-section toolbar-page">
-            <button onclick="prevPage()" title="Previous page">&#8592;</button>
+            <button id="prevPageBtn" title="Previous page" aria-label="Previous page">&#8592;</button>
             <input type="number" class="page-input small" id="pageInput" min="1" placeholder="0" title="Go to page (G)">
             <span class="dim">/ <span id="pageTotal">0</span></span>
-            <button onclick="nextPage()" title="Next page">&#8594;</button>
+            <button id="nextPageBtn" title="Next page" aria-label="Next page">&#8594;</button>
         </div>
         <div class="toolbar-section toolbar-keyword" id="navGroup">
             <span class="separator" id="navSep" style="display:none;">|</span>
-            <button onclick="showSearchOverlay()" class="search-toggle-btn" title="Search (Ctrl+F)">⌕</button>
+            <button id="searchToggleBtn" class="search-toggle-btn" title="Search (Ctrl+F)" aria-label="Search (Ctrl+F)">⌕</button>
             <select class="keyword-select small" id="keywordSelect" title="Keyword"></select>
-            <button onclick="findPrev()" title="Previous match">&#8592;</button>
+            <!-- <button id="kwManageBtn" class="kw-manage-btn" title="Manage keyword lists" aria-label="Manage keyword lists">&#9881;</button> -->
+            <button id="findPrevBtn" title="Previous match" aria-label="Previous match">&#8592;</button>
             <input type="number" class="match-input small" id="matchInput" min="1" placeholder="0" title="Go to match number">
             <span class="dim">/ <span id="matchTotal">0</span></span>
-            <button onclick="findNext()" title="Next match">&#8594;</button>
-            <button class="nav-clear" onclick="clearSearch()" title="Clear search">&#10005;</button>
+            <button id="findNextBtn" title="Next match" aria-label="Next match">&#8594;</button>
+            <button id="clearSearchBtn" class="nav-clear" title="Clear search" aria-label="Clear search">&#10005;</button>
         </div>
         <div class="toolbar-section toolbar-measure" id="measureSection">
-            <button onclick="calibrateScale()" id="calibrateScaleBtn" title="Calibrate scale (click two points on a known dimension)">&#9878;</button>
+            <button id="calibrateScaleBtn" title="Calibrate scale (click two points on a known dimension)" aria-label="Calibrate scale (click two points on a known dimension)">&#9878;</button>
             <input type="text" class="scale-input small" id="scaleInput" value="1:100" placeholder="1:XXX" title="Scale 1:X">
-            <button onclick="measureDistance()" id="measureDistBtn" title="Measure distance">&#8597;</button>
-            <button onclick="measurePerimeter()" id="measurePerimBtn" title="Polyline (click points, dbl-click/Enter to finish)">&#8629;</button>
-            <button onclick="measureArea()" id="measureAreaBtn" title="Area (click points, dbl-click/Enter to close)">&#9633;</button>
-            <button onclick="clearMeasurements()" id="clearMeasureBtn" title="Clear all measurements">&#10005;</button>
+            <button id="measureDistBtn" title="Measure distance" aria-label="Measure distance">&#8597;</button>
+            <button id="measurePerimBtn" title="Polyline (click points, dbl-click/Enter to finish)" aria-label="Polyline (click points, dbl-click/Enter to finish)">&#8629;</button>
+            <button id="measureAreaBtn" title="Area (click points, dbl-click/Enter to close)" aria-label="Area (click points, dbl-click/Enter to close)">&#9633;</button>
+            <button id="clearMeasureBtn" title="Clear all measurements" aria-label="Clear all measurements">&#10005;</button>
         </div>
     </div>
 
@@ -112,7 +113,7 @@
         <h2>&#10548; Drop a folder to begin scanning</h2>
         <p></p>
     </div>
-        <div id="viewerLoader">
+        <div id="viewerLoader" aria-live="polite">
             <div class="spinner"></div>
             <div class="loader-details">
                 <div class="loader-filename" id="loaderFilename">Loading PDF...</div>
@@ -124,36 +125,57 @@
     </div>
 </div>
 
-<div id="keywordManager">
-    <div class="modal">
-        <h3>Manage Keywords</h3>
-        <div class="keyword-list-header">
-            <select id="listSelector" onchange="loadListIntoEditor()"></select>
-            <button onclick="showNewListDialog()" class="btn-action" style="flex:none; width:80px;">+ New</button>
-            <button onclick="deleteCurrentList()" id="deleteListBtn" class="btn-action" style="flex:none; width:80px; background:#c0392b;">Delete</button>
+<div id="settingsMenu" class="settings-menu">
+    <button class="settings-menu-btn" id="settingsKwBtn">&#9881; Manage Keywords</button>
+    <button class="settings-menu-btn" id="settingsThemeBtn">&#9728; Dark Mode</button>
+    <button class="settings-menu-btn toggle-btn" id="settingsAnimateBtn">
+        <span class="toggle-label">Animate PDF Scroll </span>
+        <span class="toggle-state">OFF</span>
+    </button>
+    <div class="settings-menu-section">
+        <span class="toggle-label">Render Quality:</span>
+        <div class="settings-menu-row">
+            <button class="settings-menu-quality-btn" data-quality="quality">Quality</button>
+            <button class="settings-menu-quality-btn" data-quality="medium">Medium</button>
+            <button class="settings-menu-quality-btn" data-quality="fast">Fast</button>
         </div>
-        <p class="list-info" id="listInfo"></p>
-        <textarea id="keywordInput" style="width: 360px; height: 247px;"></textarea>
-        <div class="modal-footer">
-            <div style="display:flex;gap:8px;">
-                <button onclick="exportKeywords()" class="btn-action" style="flex:none; width:80px;">Export</button>
-                <button onclick="importKeywords()" class="btn-action" style="flex:none; width:80px;">Import</button>
-            </div>
-            <div style="display:flex;gap:8px;">
-                <button onclick="toggleKeywordManager()" class="btn-action" style="flex:none; width:80px;">Cancel</button>
-                <button onclick="saveCurrentList()" class="btn-action" style="flex:none; width:100px; background:var(--green); color:white; border:none;">Save & Apply</button>
-            </div>
+    </div>
+    <div class="settings-menu-section">
+        <a class="settings-menu-link" href="https://github.com/kvnhndrsn/kwpdf" target="_blank" rel="noopener noreferrer">
+            <img class="settings-menu-link-icon" src="dist/icons/github.svg" alt="GitHub"> source code on GitHub
+        </a>
+    </div>
+</div>
+
+<div id="keywordMenu" class="keyword-menu">
+    <div class="keyword-menu-section">
+        <div class="keyword-menu-row">
+            <select id="kwListSelector"></select>
+            <button id="kwNewListBtn">+ New</button>
+            <button id="kwDeleteListBtn">Delete</button>
         </div>
+    </div>
+    <div class="keyword-menu-info" id="kwListInfo"></div>
+    <textarea id="kwInput"></textarea>
+    <div class="keyword-menu-section" style="border-top:none;padding-top:0;">
+        <div class="keyword-menu-row">
+            <button id="kwExportBtn">Export</button>
+            <button id="kwImportBtn">Import</button>
+        </div>
+    </div>
+    <div class="keyword-menu-footer">
+        <button id="kwCancelBtn">Cancel</button>
+        <button id="kwSaveBtn">Save & Apply</button>
     </div>
 </div>
 
 <div id="newListDialog">
     <div class="modal">
         <h3>New Keyword List</h3>
-        <input type="text" id="newListName" placeholder="List name" onkeydown="if(event.key==='Enter')createNewList()">
+        <input type="text" id="newListName" placeholder="List name">
         <div class="modal-footer">
-            <button onclick="hideNewListDialog()" class="btn-action" style="flex:none; width:100px;">Cancel</button>
-            <button onclick="createNewList()" class="btn-action" style="flex:none; width:80px; background:var(--green); color:white; border:none;">Create</button>
+            <button id="hideNewListBtn" class="btn-action" style="flex:none; width:100px;">Cancel</button>
+            <button id="createNewListBtn" class="btn-action" style="flex:none; width:80px; background:var(--accent); color:white; border:none;">Create</button>
         </div>
     </div>
 </div>

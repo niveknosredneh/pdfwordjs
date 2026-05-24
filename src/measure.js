@@ -5,8 +5,8 @@ import * as dom from './dom.js';
 
 /** @type {'distance'|'polyline'|'area'|null} */
 let activeTool = null;
-/** @type {number} the X in "1:X" */
-let scaleX = 100;
+/** @type {number} the ratio in "1:{scaleRatio}" */
+let scaleRatio = 100;
 /** @type {Object<string, Array<{id:string, type:string, points:Array, label:string, areaMm2?:number}>>} */
 let measurementsByDoc = {};
 /** @type {Array<{page:number, x:number, y:number}>} */
@@ -14,9 +14,9 @@ let pendingPoints = [];
 /** @type {{x1:number, y1:number, x2:number, y2:number}|null} */
 let previewLine = null;
 /** @type {number|null} */
-let activePage = null;
+let activePageNumNum = null;
 /** @type {boolean} */
-let isListening = false;
+let isMouseListening = false;
 
 /** @type {boolean} scale calibration mode */
 let isCalibrating = false;
@@ -58,14 +58,14 @@ function loadScale() {
         const raw = localStorage.getItem(SCALE_STORAGE_KEY);
         if (raw) {
             const parsed = parseFloat(raw);
-            if (!isNaN(parsed) && parsed >= 0.001 && parsed <= MAX_SCALE) scaleX = parsed;
+            if (!isNaN(parsed) && parsed >= 0.001 && parsed <= MAX_SCALE) scaleRatio = parsed;
         }
     } catch (e) { /* ignore */ }
 }
 
 function saveScale() {
     try {
-        localStorage.setItem(SCALE_STORAGE_KEY, String(scaleX));
+        localStorage.setItem(SCALE_STORAGE_KEY, String(scaleRatio));
     } catch (e) { /* ignore */ }
 }
 
@@ -83,7 +83,7 @@ function pdfToMm(pdfPts) {
 
 /** @param {number} pdfPts */
 function realWorldMm(pdfPts) {
-    return pdfToMm(pdfPts) * scaleX;
+    return pdfToMm(pdfPts) * scaleRatio;
 }
 
 function addCommas(n) {
@@ -223,12 +223,12 @@ function pageEventToPdfCoords(e) {
 export function setScale(value) {
     const parsed = parseFloat(value);
     if (isNaN(parsed) || parsed < 0.001 || parsed > MAX_SCALE) return;
-    scaleX = parsed;
+    scaleRatio = parsed;
     saveScale();
 }
 
 export function getScale() {
-    return scaleX;
+    return scaleRatio;
 }
 
 export function getActiveTool() {
@@ -246,10 +246,10 @@ export function activateTool(tool) {
     activeTool = tool;
     pendingPoints = [];
     previewLine = null;
-    activePage = null;
-    if (!isListening) {
+    activePageNum = null;
+    if (!isMouseListening) {
         dom.viewerScroll.addEventListener('mousemove', onMouseMove);
-        isListening = true;
+        isMouseListening = true;
     }
     dom.viewerScroll.classList.add('is-measuring');
 }
@@ -258,10 +258,10 @@ export function deactivateTool() {
     activeTool = null;
     pendingPoints = [];
     previewLine = null;
-    activePage = null;
-    if (isListening) {
+    activePageNum = null;
+    if (isMouseListening) {
         dom.viewerScroll.removeEventListener('mousemove', onMouseMove);
-        isListening = false;
+        isMouseListening = false;
     }
     dom.viewerScroll.classList.remove('is-measuring');
     ['measureDistBtn', 'measurePerimBtn', 'measureAreaBtn'].forEach(id => {
@@ -274,7 +274,7 @@ export function deactivateTool() {
 export function cancelMeasurement() {
     pendingPoints = [];
     previewLine = null;
-    activePage = null;
+    activePageNum = null;
     renderAllMeasurements();
 }
 
@@ -296,9 +296,9 @@ export function startCalibration() {
     isCalibrating = true;
     calibrationPoint = null;
     calibrationMeters = 0;
-    if (!isListening) {
+    if (!isMouseListening) {
         dom.viewerScroll.addEventListener('mousemove', onMouseMove);
-        isListening = true;
+        isMouseListening = true;
     }
     dom.viewerScroll.classList.add('is-measuring');
     const scaleInput = document.getElementById('scaleInput');
@@ -316,17 +316,17 @@ export function cancelCalibration() {
     calibrationMeters = 0;
     calibrationPoint = null;
     previewLine = null;
-    activePage = null;
-    if (isListening && !activeTool) {
+    activePageNum = null;
+    if (isMouseListening && !activeTool) {
         dom.viewerScroll.removeEventListener('mousemove', onMouseMove);
-        isListening = false;
+        isMouseListening = false;
     }
     dom.viewerScroll.classList.remove('is-measuring');
     const scaleInput = document.getElementById('scaleInput');
     if (scaleInput) {
         scaleInput.placeholder = '1:XXX';
         scaleInput.title = 'Scale 1:X';
-        scaleInput.value = '1:' + scaleX;
+        scaleInput.value = '1:' + scaleRatio;
     }
     const btn = document.getElementById('calibrateScaleBtn');
     if (btn) btn.classList.remove('active-tool');
@@ -378,7 +378,7 @@ export function onPageClick(e) {
 function handleDistanceClick(coords) {
     if (pendingPoints.length === 0) {
         pendingPoints.push(coords);
-        activePage = coords.page;
+        activePageNum = coords.page;
         renderAllMeasurements();
         return;
     }
@@ -386,7 +386,7 @@ function handleDistanceClick(coords) {
     if (pendingPoints.length === 1) {
         if (pendingPoints[0].page !== coords.page) {
             pendingPoints = [coords];
-            activePage = coords.page;
+            activePageNum = coords.page;
             renderAllMeasurements();
             return;
         }
@@ -418,14 +418,14 @@ function handleCalibrationClick(e) {
     if (!calibrationPoint) {
         calibrationMeters = meters;
         calibrationPoint = coords;
-        activePage = coords.page;
+        activePageNum = coords.page;
         renderAllMeasurements();
         return;
     }
 
     if (calibrationPoint.page !== coords.page) {
         calibrationPoint = coords;
-        activePage = coords.page;
+        activePageNum = coords.page;
         renderAllMeasurements();
         return;
     }
@@ -468,7 +468,7 @@ function finalizeDistance() {
     const p2 = pendingPoints[1];
     const pdfDist = distanceBetween(p1, p2);
     const realMm = realWorldMm(pdfDist);
-    const label = formatLength(realMm) + ' @ 1:' + scaleX;
+    const label = formatLength(realMm) + ' @ 1:' + scaleRatio;
 
     measurementsByDoc[url].push({
         id: generateId(),
@@ -479,7 +479,7 @@ function finalizeDistance() {
 
     pendingPoints = [];
     previewLine = null;
-    activePage = null;
+    activePageNum = null;
     saveMeasurements();
     renderAllMeasurements();
     deactivateTool();
@@ -491,11 +491,11 @@ function finalizeDistance() {
 function handlePerimeterClick(coords) {
     if (pendingPoints.length === 0) {
         pendingPoints.push(coords);
-        activePage = coords.page;
+        activePageNum = coords.page;
         renderAllMeasurements();
         return;
     }
-    if (coords.page !== activePage) return;
+    if (coords.page !== activePageNum) return;
     pendingPoints.push(coords);
     renderAllMeasurements();
 }
@@ -510,7 +510,7 @@ function finalizePerimeter() {
         totalPdf += distanceBetween(pendingPoints[i], pendingPoints[i + 1]);
     }
     const realMm = realWorldMm(totalPdf);
-    const label = formatLength(realMm) + ' @ 1:' + scaleX;
+    const label = formatLength(realMm) + ' @ 1:' + scaleRatio;
 
     measurementsByDoc[url].push({
         id: generateId(),
@@ -521,7 +521,7 @@ function finalizePerimeter() {
 
     pendingPoints = [];
     previewLine = null;
-    activePage = null;
+    activePageNum = null;
     saveMeasurements();
     renderAllMeasurements();
 }
@@ -545,12 +545,12 @@ function finalizeArea() {
         if (poly.length < 3) continue;
 
         const pdfArea = simplePolygonArea(poly);
-        const realMm2 = pdfArea / (POINTS_PER_MM * POINTS_PER_MM) * scaleX * scaleX;
+        const realMm2 = pdfArea / (POINTS_PER_MM * POINTS_PER_MM) * scaleRatio * scaleRatio;
 
         const pdfPerim = polylineLength(poly, true);
         const realPerimMm = realWorldMm(pdfPerim);
 
-        const label = 'Area: ' + formatArea(realMm2) + '\nPerim: ' + formatLength(realPerimMm) + ' @ 1:' + scaleX;
+        const label = 'Area: ' + formatArea(realMm2) + '\nPerim: ' + formatLength(realPerimMm) + ' @ 1:' + scaleRatio;
 
         measurementsByDoc[url].push({
             id: generateId(),
@@ -563,7 +563,7 @@ function finalizeArea() {
 
     pendingPoints = [];
     previewLine = null;
-    activePage = null;
+    activePageNum = null;
     saveMeasurements();
     renderAllMeasurements();
 }
@@ -582,10 +582,10 @@ function onMouseMove(e) {
         if (!calibrationPoint) return;
         const coords = pageEventToPdfCoords(e);
         if (!coords) return;
-        if (coords.page !== activePage) {
+        if (coords.page !== activePageNum) {
             if (previewLine) {
                 previewLine = null;
-                renderAllMeasurements();
+                clearPreview();
             }
             return;
         }
@@ -596,16 +596,17 @@ function onMouseMove(e) {
             x2: snapped.x,
             y2: snapped.y
         };
-        renderAllMeasurements();
+        clearPreview();
+        renderPreview();
         return;
     }
     if (!activeTool || pendingPoints.length === 0) return;
     const coords = pageEventToPdfCoords(e);
     if (!coords) return;
-    if (coords.page !== activePage) {
+    if (coords.page !== activePageNum) {
         if (previewLine) {
             previewLine = null;
-            renderAllMeasurements();
+            clearPreview();
         }
         return;
     }
@@ -617,7 +618,8 @@ function onMouseMove(e) {
         x2: snapped.x,
         y2: snapped.y
     };
-    renderAllMeasurements();
+    clearPreview();
+    renderPreview();
 }
 
 // ── rendering ──
@@ -626,7 +628,11 @@ function clearMeasurementOverlays() {
     document.querySelectorAll('.measure-layer').forEach(el => el.remove());
 }
 
-export function renderAllMeasurements() {
+function clearPreview() {
+    document.querySelectorAll('.measure-line-ghost, .measure-label-ghost, .measure-fill-ghost').forEach(el => el.remove());
+}
+
+function renderBase() {
     clearMeasurementOverlays();
 
     const url = getDocKey();
@@ -636,25 +642,32 @@ export function renderAllMeasurements() {
         renderMeasurement(m);
     }
 
-    if (isCalibrating && calibrationPoint && activePage) {
+    if (isCalibrating && calibrationPoint && activePageNum) {
         renderCalibrationPendingPoint();
     }
 
-    if (pendingPoints.length > 0 && activePage) {
+    if (pendingPoints.length > 0 && activePageNum) {
         if (activeTool === 'distance') {
             renderPendingPoint();
         } else if ((activeTool === 'perimeter' || activeTool === 'area') && pendingPoints.length >= 2) {
             renderPendingPerimeter();
         }
     }
+}
 
-    if (previewLine && activePage) {
+function renderPreview() {
+    if (previewLine && activePageNum) {
         if (isCalibrating) {
             renderCalibrationPreview();
         } else {
             renderPreviewLine();
         }
     }
+}
+
+export function renderAllMeasurements() {
+    renderBase();
+    renderPreview();
 }
 
 /** @param {number} pageNum */
@@ -841,8 +854,8 @@ function renderPerimeter(points, label, isPreview, measId) {
 
 function renderPendingPerimeter() {
     const points = pendingPoints;
-    if (points.length < 2 || !activePage) return;
-    const pageEl = getPageEl(activePage);
+    if (points.length < 2 || !activePageNum) return;
+    const pageEl = getPageEl(activePageNum);
     if (!pageEl) return;
     const s = state.currentScale || 1;
     const layer = getOrCreateLayer(pageEl);
@@ -960,9 +973,9 @@ function renderCalibrationPendingPoint() {
 }
 
 function renderCalibrationPreview() {
-    if (!previewLine || !activePage || !calibrationMeters) return;
+    if (!previewLine || !activePageNum || !calibrationMeters) return;
     const s = state.currentScale || 1;
-    const pageEl = getPageEl(activePage);
+    const pageEl = getPageEl(activePageNum);
     if (!pageEl) return;
     const layer = getOrCreateLayer(pageEl);
 
@@ -982,9 +995,9 @@ function renderCalibrationPreview() {
 }
 
 function renderPreviewLine() {
-    if (!previewLine || !activePage) return;
+    if (!previewLine || !activePageNum) return;
     const s = state.currentScale || 1;
-    const pageEl = getPageEl(activePage);
+    const pageEl = getPageEl(activePageNum);
     if (!pageEl) return;
     const layer = getOrCreateLayer(pageEl);
 
@@ -1017,7 +1030,7 @@ function renderPreviewLine() {
                     layer.appendChild(fill);
 
                     const pdfArea = simplePolygonArea(poly);
-                    const realMm2 = pdfArea / (POINTS_PER_MM * POINTS_PER_MM) * scaleX * scaleX;
+                    const realMm2 = pdfArea / (POINTS_PER_MM * POINTS_PER_MM) * scaleRatio * scaleRatio;
                     totalAreaMm2 += realMm2;
                     const pdfPerim = polylineLength(poly, true);
                     const realPerimMm = realWorldMm(pdfPerim);

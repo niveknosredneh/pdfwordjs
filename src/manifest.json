@@ -4,8 +4,8 @@
     "description": "Scan PDFs for keywords",
     "start_url": "./index.html",
     "display": "standalone",
-    "background_color": "#1a1a1a",
-    "theme_color": "#2d2d2d",
+    "background_color": "#f5f5f5",
+    "theme_color": "#f5f5f5",
     "icons": [
         {
             "src": "favicon.ico",

@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import * as dom from './dom.js';
-import { getKeywordRegex } from './keyword-regex.js';
-import { fn } from './cross.js';
+import { getKeywordRegex, normalizeKeywordMatch } from './keyword-regex.js';
+import { fn, KEYWORDS } from './cross.js';
 
 state.searchResults = [];
 state.currentMatchIndex = -1;
@@ -92,7 +92,7 @@ function computeMatchCoords(matchStart, matchEnd, viewport, textItems, offsetMap
 export async function precomputeAllSearches() {
     if (state.searchCache._deduplicated) return;
 
-    const combinedRegex = getKeywordRegex(window.KEYWORDS);
+    const combinedRegex = getKeywordRegex(KEYWORDS);
 
     for (let pageNum = 1; pageNum <= state.totalPages; pageNum++) {
         const cached = state.textPageCache[pageNum];
@@ -109,10 +109,8 @@ export async function precomputeAllSearches() {
 
         let match;
         while ((match = combinedRegex.exec(pageText)) !== null) {
-            if (match[0].length < 3) continue;
-            if (!/[a-zA-Z]/.test(match[0])) continue;
-            const lower = match[0].toLowerCase();
-            const canonical = (window.KEYWORDS || []).find(k => k.toLowerCase() === lower) || lower;
+            const canonical = normalizeKeywordMatch(match, KEYWORDS);
+            if (!canonical) continue;
 
             if (state.searchCache[canonical] === undefined) state.searchCache[canonical] = [];
 
@@ -122,7 +120,7 @@ export async function precomputeAllSearches() {
     }
 
     state.searchCache._deduplicated = true;
-    fn.populateKeywordSelect();
+    state.emit('keywords-changed');
 }
 
 async function computeSearchForQuery(query) {
@@ -148,8 +146,7 @@ async function computeSearchForQuery(query) {
 
         let match;
         while ((match = localRegex.exec(pageText)) !== null) {
-            if (match[0].length < 3) continue;
-            if (!/[a-zA-Z]/.test(match[0])) continue;
+            if (!normalizeKeywordMatch(match)) continue;
 
             const coords = computeMatchCoords(match.index, match.index + match[0].length, viewport, textItems, offsetMap);
             results.push({ page: pageNum, ...coords });
@@ -197,13 +194,54 @@ function appendOcrResults(keyword) {
     }
 }
 
+export function cycleAllKeywords() {
+    if (!state.searchCache._deduplicated) return;
+
+    const allResults = [];
+    for (const [keyword, results] of Object.entries(state.searchCache)) {
+        if (keyword === '_deduplicated') continue;
+        for (const r of results) {
+            allResults.push({ ...r, keyword });
+        }
+    }
+    allResults.sort((a, b) => a.page - b.page || a.y - b.y);
+
+    if (allResults.length === 0) return;
+
+    const wasAlreadyAll = state.allKeywordMode && state.searchResults.length === allResults.length;
+
+    state.allKeywordMode = true;
+    state.activeKeyword = '';
+    state.searchResults = allResults;
+    buildSearchResultsByPage();
+
+    if (wasAlreadyAll) {
+        state.currentMatchIndex = (state.currentMatchIndex + 1) % allResults.length;
+    } else {
+        state.currentMatchIndex = 0;
+    }
+
+    dom.navGroup.classList.add('active');
+    dom.navSep.style.display = '';
+    dom.matchTotal.textContent = allResults.length;
+    dom.matchInput.max = allResults.length;
+    dom.matchInput.value = state.currentMatchIndex + 1;
+    renderAllHighlights();
+    state.emit('keywords-changed');
+    state.emit('badge-changed');
+    state.emit('heatmaps-changed');
+    fn.startPrerender();
+    fn.goToMatch(state.currentMatchIndex);
+}
+
 export async function performSearch(query) {
     if (!state.pdfDoc || !query) return;
+    state.allKeywordMode = false;
 
     let canonicalQuery = query;
     if (state.searchCache[query] === undefined) {
         const lower = query.toLowerCase();
-        const found = (window.KEYWORDS || []).find(k => k.toLowerCase() === lower);
+        const found = (KEYWORDS || []).find(k => k.toLowerCase() === lower);
         if (found && state.searchCache[found] !== undefined) canonicalQuery = found;
     }
 
@@ -239,9 +277,9 @@ function showSearchResults() {
         dom.matchInput.value = 1;
         state.currentMatchIndex = 0;
         renderAllHighlights();
-        fn.populateKeywordSelect();
-        fn.updateSidebarBadge();
-        fn.renderPageHeatmaps();
+        state.emit('keywords-changed');
+        state.emit('badge-changed');
+        state.emit('heatmaps-changed');
         fn.startPrerender();
         fn.goToMatch(0);
     } else {
@@ -250,14 +288,15 @@ function showSearchResults() {
         dom.matchTotal.textContent = '0';
         dom.matchInput.value = '';
         state.currentMatchIndex = -1;
-        fn.updateSidebarBadge();
-        fn.populateKeywordSelect();
-        fn.renderPageHeatmaps();
+        state.emit('badge-changed');
+        state.emit('keywords-changed');
+        state.emit('heatmaps-changed');
     }
 }
 
 export function cycleSearch(query) {
     if (!state.pdfDoc || !query) return;
+    state.allKeywordMode = false;
 
     if (state.searchCache[query] !== undefined) {
         state.searchResults = state.searchCache[query];
@@ -273,15 +312,15 @@ export function cycleSearch(query) {
             dom.matchInput.max = state.searchResults.length;
             dom.matchInput.value = state.currentMatchIndex + 1;
             renderAllHighlights();
-            fn.populateKeywordSelect();
-            fn.renderPageHeatmaps();
+            state.emit('keywords-changed');
+            state.emit('heatmaps-changed');
             fn.goToMatch(state.currentMatchIndex);
         } else {
             dom.navGroup.classList.remove('active');
             dom.navSep.style.display = 'none';
             dom.matchTotal.textContent = '0';
             dom.matchInput.value = '';
-            fn.populateKeywordSelect();
+            state.emit('keywords-changed');
         }
         return;
     }

@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import * as dom from './dom.js';
-import { fn } from './cross.js';
-import { getKeywordRegex } from './keyword-regex.js';
+import { fn, pdfjsLib, KEYWORDS } from './cross.js';
+import { getKeywordRegex, normalizeKeywordMatch } from './keyword-regex.js';
 
 let ocrEnabled = true;
 const ocrFileState = new Map();
@@ -38,7 +38,7 @@ export function initOcr() {
 export function toggleOcrGlobal() {
     ocrEnabled = !ocrEnabled;
     localStorage.setItem('pdf_ocr_enabled', ocrEnabled);
-    fn.renderResultsArea();
+    state.emit('results-changed');
     return ocrEnabled;
 }
 
@@ -58,8 +58,8 @@ export function toggleOcrForFile(url) {
             delete data._ocrCounts;
             delete data._ocrTotalMatches;
         }
-        fn.renderResultsArea();
-        fn.updateStats();
+        state.emit('results-changed');
+        state.emit('stats-changed');
         return false;
     }
 
@@ -67,9 +67,9 @@ export function toggleOcrForFile(url) {
     startOcrForFile(url).catch(err => {
         console.error('[OCR] Error:', err);
         ocrFileState.set(url, { status: 'error', texts: [], counts: {}, totalMatches: 0 });
-        fn.renderResultsArea();
+        state.emit('results-changed');
     });
-    fn.renderResultsArea();
+    state.emit('results-changed');
     return true;
 }
 
@@ -184,21 +184,21 @@ async function startOcrForFile(url) {
     const cacheEntry = state.docTextCache[url];
     if (!cacheEntry) {
         ocrFileState.set(url, { status: 'error', texts: [], counts: {}, totalMatches: 0 });
-        fn.renderResultsArea();
+        state.emit('results-changed');
         return;
     }
 
     const numPages = cacheEntry.totalPages || 0;
     if (!numPages) {
         ocrFileState.set(url, { status: 'error', texts: [], counts: {}, totalMatches: 0 });
-        fn.renderResultsArea();
+        state.emit('results-changed');
         return;
     }
 
     const lowerName = (cacheEntry.fileName || '').toLowerCase();
     if (!lowerName.endsWith('.pdf')) {
         ocrFileState.set(url, { status: 'error', texts: [], counts: {}, totalMatches: 0 });
-        fn.renderResultsArea();
+        state.emit('results-changed');
         return;
     }
 
@@ -214,12 +214,12 @@ async function startOcrForFile(url) {
             const response = await fetch(url);
             const arrayBuffer = await response.arrayBuffer();
             const pdfData = new Uint8Array(arrayBuffer);
-            pdfDoc = await window.pdfjsLib.getDocument({ data: pdfData }).promise;
+            pdfDoc = await pdfjsLib.getDocument({ data: pdfData }).promise;
         }
     } catch (err) {
         console.error('[OCR] Failed to load PDF for OCR:', err);
         ocrFileState.set(url, { status: 'error', texts: [], counts: {}, totalMatches: 0 });
-        fn.renderResultsArea();
+        state.emit('results-changed');
         return;
     }
 
@@ -293,7 +293,7 @@ async function startOcrForFile(url) {
         try { pdfDoc.destroy(); } catch (e) { /* ignore */ }
     }
 
-    const keywords = window.KEYWORDS || [];
+    const keywords = KEYWORDS || [];
     const combinedRegex = getKeywordRegex(keywords);
     const counts = {};
     let totalMatches = 0;
@@ -315,10 +315,8 @@ async function startOcrForFile(url) {
             const regex = new RegExp(combinedRegex.source, 'gi');
             let match;
             while ((match = regex.exec(pageData.flatText)) !== null) {
-                if (match[0].length < 3) continue;
-                if (!/[a-zA-Z]/.test(match[0])) continue;
-                const lower = match[0].toLowerCase();
-                const key = keywordMap.get(lower) || lower;
+                const key = normalizeKeywordMatch(match, keywordMap);
+                if (!key) continue;
                 counts[key] = (counts[key] || 0) + 1;
                 totalMatches++;
             }
@@ -339,10 +337,8 @@ async function startOcrForFile(url) {
             let m;
             let matchedOnWord = false;
             while ((m = wordRegex.exec(wordText)) !== null) {
-                if (m[0].length < 3) continue;
-                if (!/[a-zA-Z]/.test(m[0])) continue;
-                const lower = m[0].toLowerCase();
-                const key = keywordMap.get(lower) || lower;
+                const key = normalizeKeywordMatch(m, keywordMap);
+                if (!key) continue;
                 if (!matchedOnWord) {
                     matchedOnWord = true;
                     const bbox = word.bbox;
@@ -371,8 +367,8 @@ async function startOcrForFile(url) {
 
     ocrFileState.set(url, { status: 'done', pageWordData, counts, totalMatches, keywordMatches });
     state.totalMatchesFound += totalMatches;
-    fn.renderResultsArea();
-    fn.updateStats();
+    state.emit('results-changed');
+    state.emit('stats-changed');
     dom.statusBar.textContent = 'OCR done - ' + fileName + ': ' + totalMatches + ' new matches';
     dom.progressBar.style.width = '100%';
     setTimeout(() => { dom.progressBar.style.width = '0%'; }, 800);

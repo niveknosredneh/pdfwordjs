@@ -10,6 +10,13 @@ function getKeywordRegex(keywords) {
     return new RegExp(`\\b(${pattern})\\b`, 'gi');
 }
 
+function normalizeKeywordMatch(match, keywords) {
+    if (match[0].length < 3) return null;
+    if (!/[a-zA-Z]/.test(match[0])) return null;
+    const lower = match[0].toLowerCase();
+    return keywords.find(k => k.toLowerCase() === lower) || lower;
+}
+
 // Process regex matching on text (for DOCX or plain text)
 function processRegexOnText(text, keywords) {
     const counts = {};
@@ -20,10 +27,8 @@ function processRegexOnText(text, keywords) {
         let match;
         const regex = new RegExp(combinedRegex.source, 'gi');
         while ((match = regex.exec(text)) !== null) {
-            if (match[0].length < 3) continue;
-            if (!/[a-zA-Z]/.test(match[0])) continue;
-            const lower = match[0].toLowerCase();
-            const key = keywords.find(k => k.toLowerCase() === lower) || lower;
+            const key = normalizeKeywordMatch(match, keywords);
+            if (!key) continue;
             counts[key] = (counts[key] || 0) + 1;
             totalMatches++;
         }
@@ -48,10 +53,8 @@ function processRegexOnPDFCache(pages, keywords) {
                 let match;
                 const regex = new RegExp(combinedRegex.source, 'gi');
                 while ((match = regex.exec(text)) !== null) {
-                    if (match[0].length < 3) continue;
-                    if (!/[a-zA-Z]/.test(match[0])) continue;
-                    const lower = match[0].toLowerCase();
-                    const key = keywords.find(k => k.toLowerCase() === lower) || lower;
+                    const key = normalizeKeywordMatch(match, keywords);
+                    if (!key) continue;
                     counts[key] = (counts[key] || 0) + 1;
                     totalMatches++;
                 }

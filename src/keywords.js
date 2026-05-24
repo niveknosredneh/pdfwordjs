@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import * as dom from './dom.js';
 import { clearKeywordRegexCache, getKeywordRegex } from './keyword-regex.js';
+import { fn, setKeywords, setKeywordLists, setDefaultListName } from './cross.js';
 
 let DEFAULT_LIST_NAME = 'Central Supply-Only';
 let KEYWORD_LISTS = {};
@@ -44,6 +45,7 @@ export async function loadKeywords() {
         KEYWORD_LISTS = {};
         KEYWORDS = [];
     }
+    syncToBus();
 }
 
 function loadCustomLists() {
@@ -53,7 +55,9 @@ function loadCustomLists() {
             const custom = JSON.parse(saved);
             KEYWORD_LISTS = { ...KEYWORD_LISTS, ...custom };
         }
-    } catch (e) {}
+    } catch (e) {
+        console.warn('Failed to parse custom keyword lists from localStorage:', e);
+    }
 }
 
 function saveCustomLists() {
@@ -73,17 +77,20 @@ export function isCustomList(name) {
 
 function createList(name, words) {
     KEYWORD_LISTS[name] = words;
+    setKeywordLists(KEYWORD_LISTS);
     saveCustomLists();
 }
 
 function updateList(name, words) {
     KEYWORD_LISTS[name] = words;
+    setKeywordLists(KEYWORD_LISTS);
     saveCustomLists();
 }
 
 function deleteList(name) {
     if (isCustomList(name)) {
         delete KEYWORD_LISTS[name];
+        setKeywordLists(KEYWORD_LISTS);
         saveCustomLists();
         return true;
     }
@@ -96,6 +103,7 @@ export function switchKeywordList(listName) {
     localStorage.setItem('tender_keyword_list', listName);
     currentListName = listName;
     KEYWORDS = KEYWORD_LISTS[listName];
+    setKeywords(KEYWORDS);
     localStorage.setItem('tender_keywords', JSON.stringify(KEYWORDS));
     clearKeywordRegexCache();
 
@@ -123,17 +131,16 @@ export function populateListSelector() {
         }
     }
 
-    const modalSelector = dom.listSelector;
-    if (modalSelector && KEYWORD_LISTS) {
-        modalSelector.innerHTML = '';
+    if (dom.kwListSelector && KEYWORD_LISTS) {
+        dom.kwListSelector.innerHTML = '';
         for (const name of Object.keys(KEYWORD_LISTS)) {
             const opt = document.createElement('option');
             opt.value = name;
             opt.textContent = `${name} (${KEYWORD_LISTS[name].length})`;
-            modalSelector.appendChild(opt);
+            dom.kwListSelector.appendChild(opt);
         }
         if (KEYWORD_LISTS[currentListName]) {
-            modalSelector.value = currentListName;
+            dom.kwListSelector.value = currentListName;
         }
     }
 }
@@ -151,54 +158,169 @@ export function populateKeywordSelect() {
     });
 }
 
-export function toggleKeywordManager() {
-    const modal = dom.keywordManager;
-    if (!modal) return;
+function getFocusable(el) {
+    return el.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+}
 
-    const isShowing = modal.classList.toggle('show');
+function trapFocus(modal, focusAfterClosed) {
+    const prevFocus = focusAfterClosed || document.activeElement;
+    const focusable = getFocusable(modal);
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    first?.focus();
+
+    function handler(e) {
+        if (e.key === 'Escape') {
+            if (modal === dom.keywordMenu) {
+                toggleKeywordManager();
+            } else if (modal.classList.contains('show')) {
+                hideNewListDialog();
+            }
+            return;
+        }
+        if (e.key !== 'Tab') return;
+        const isShift = e.shiftKey;
+        if (isShift && document.activeElement === first) {
+            e.preventDefault();
+            last?.focus();
+        } else if (!isShift && document.activeElement === last) {
+            e.preventDefault();
+            first?.focus();
+        }
+    }
+
+    document.addEventListener('keydown', handler);
+
+    modal._trapCleanup = () => {
+        document.removeEventListener('keydown', handler);
+        prevFocus?.focus();
+    };
+}
+
+export function toggleKeywordManager(e) {
+    if (e) e.stopPropagation();
+
+    const menu = dom.keywordMenu;
+    if (!menu) return;
+
+    const isShowing = menu.classList.toggle('visible');
 
     if (isShowing) {
-        if (dom.listSelector && KEYWORD_LISTS) {
-            dom.listSelector.innerHTML = '';
+        if (dom.kwListSelector && KEYWORD_LISTS) {
+            dom.kwListSelector.innerHTML = '';
             for (const name of Object.keys(KEYWORD_LISTS)) {
                 const opt = document.createElement('option');
                 opt.value = name;
                 opt.textContent = name;
-                dom.listSelector.appendChild(opt);
+                dom.kwListSelector.appendChild(opt);
             }
         }
         loadListIntoEditor();
+
+        const rect = dom.settingsBtn.getBoundingClientRect();
+        menu.style.left = rect.left + 'px';
+        menu.style.top = (rect.bottom + 4) + 'px';
+
+        trapFocus(menu, dom.settingsBtn);
+
+        setTimeout(() => {
+            document.addEventListener('click', closeKeywordMenuOnClickOutside);
+        }, 0);
+    } else {
+        document.removeEventListener('click', closeKeywordMenuOnClickOutside);
+        if (typeof menu._trapCleanup === 'function') {
+            menu._trapCleanup();
+            delete menu._trapCleanup;
+        }
+    }
+}
+
+function closeKeywordMenuOnClickOutside(e) {
+    const menu = dom.keywordMenu;
+    if (!menu || !menu.classList.contains('visible')) {
+        document.removeEventListener('click', closeKeywordMenuOnClickOutside);
+        return;
+    }
+    if (!menu.contains(e.target) && e.target !== dom.kwManageBtn) {
+        menu.classList.remove('visible');
+        document.removeEventListener('click', closeKeywordMenuOnClickOutside);
+        if (typeof menu._trapCleanup === 'function') {
+            menu._trapCleanup();
+            delete menu._trapCleanup;
+        }
     }
 }
 
 function loadListIntoEditor() {
-    const listName = dom.listSelector ? dom.listSelector.value : currentListName;
+    const listName = dom.kwListSelector ? dom.kwListSelector.value : currentListName;
 
     const finalName = listName || DEFAULT_LIST_NAME;
     const keywords = KEYWORD_LISTS[finalName] || [];
-    dom.keywordInput.value = keywords.join('\n');
+    dom.kwInput.value = keywords.join('\n');
 
-    if (dom.deleteListBtn) {
-        dom.deleteListBtn.style.display = isCustomList(finalName) ? '' : 'none';
+    if (dom.kwDeleteListBtn) {
+        dom.kwDeleteListBtn.style.display = isCustomList(finalName) ? '' : 'none';
     }
-    if (dom.listInfo) {
-        dom.listInfo.textContent = `${keywords.length} keywords`;
+    if (dom.kwListInfo) {
+        dom.kwListInfo.textContent = `${keywords.length} keywords`;
     }
-    if (dom.listSelector && finalName) {
-        dom.listSelector.value = finalName;
+    if (dom.kwListSelector && finalName) {
+        dom.kwListSelector.value = finalName;
     }
 }
 
 function showNewListDialog() {
-    if (dom.newListDialog) dom.newListDialog.classList.add('show');
+    const dialog = dom.newListDialog;
+    if (!dialog) return;
+    dialog.classList.add('show');
     if (dom.newListName) {
         dom.newListName.value = '';
-        dom.newListName.focus();
     }
+
+    const focusable = getFocusable(dialog);
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    dom.newListName?.focus();
+
+    function handler(e) {
+        if (e.key === 'Escape') {
+            hideNewListDialog();
+            return;
+        }
+        if (e.key !== 'Tab') return;
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last?.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first?.focus();
+        }
+    }
+
+    function backdrop(e) {
+        if (e.target === dialog) hideNewListDialog();
+    }
+
+    document.addEventListener('keydown', handler);
+    dialog.addEventListener('click', backdrop);
+
+    dialog._trapCleanup = () => {
+        document.removeEventListener('keydown', handler);
+        dialog.removeEventListener('click', backdrop);
+        dom.kwListSelector?.focus();
+    };
 }
 
 function hideNewListDialog() {
-    if (dom.newListDialog) dom.newListDialog.classList.remove('show');
+    const dialog = dom.newListDialog;
+    if (!dialog) return;
+    dialog.classList.remove('show');
+    if (typeof dialog._trapCleanup === 'function') {
+        dialog._trapCleanup();
+        delete dialog._trapCleanup;
+    }
 }
 
 function createNewList() {
@@ -211,12 +333,12 @@ function createNewList() {
     createList(name, []);
     hideNewListDialog();
     populateListSelector();
-    if (dom.listSelector) dom.listSelector.value = name;
+    if (dom.kwListSelector) dom.kwListSelector.value = name;
     loadListIntoEditor();
 }
 
 function deleteCurrentList() {
-    const listName = dom.listSelector ? dom.listSelector.value : '';
+    const listName = dom.kwListSelector ? dom.kwListSelector.value : '';
     if (!listName || !isCustomList(listName)) return;
     if (!confirm(`Delete list "${listName}"?`)) return;
     deleteList(listName);
@@ -225,9 +347,9 @@ function deleteCurrentList() {
 }
 
 function saveCurrentList() {
-    const listName = dom.listSelector ? dom.listSelector.value : currentListName;
+    const listName = dom.kwListSelector ? dom.kwListSelector.value : currentListName;
 
-    const lines = dom.keywordInput.value.split('\n')
+    const lines = dom.kwInput.value.split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0)
         .slice(0, state.MAX_KEYWORDS_PER_LIST)
@@ -238,8 +360,8 @@ function saveCurrentList() {
 
     toggleKeywordManager();
 
-    if (typeof window._performSearch === 'function') {
-        window._performSearch();
+    if (typeof fn._performSearch === 'function') {
+        fn._performSearch();
     }
 }
 
@@ -270,64 +392,82 @@ function importKeywords() {
     input.type = 'file';
     input.accept = '.json';
 
-    input.onchange = (e) => {
+    input.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
+        if (file.size > 1024 * 1024) {
+            alert('File too large. Maximum import size is 1 MB.');
+            return;
+        }
 
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.addEventListener('load', (event) => {
             try {
-                const data = JSON.parse(event.target.result);
-
-                if (!data.keywords || !Array.isArray(data.keywords)) {
-                    alert('Invalid file format. Expected keywords array.');
+                const text = event.target.result;
+                if (text.length > 1024 * 1024) {
+                    alert('File content too large.');
+                    return;
+                }
+                const data = JSON.parse(text);
+                if (!data || typeof data !== 'object' || Array.isArray(data)) {
+                    alert('Invalid file format: expected a JSON object.');
+                    return;
+                }
+                if (!Array.isArray(data.keywords)) {
+                    alert('Invalid file format: "keywords" must be an array.');
+                    return;
+                }
+                if (data.name && typeof data.name !== 'string') {
+                    alert('Invalid file format: "name" must be a string.');
                     return;
                 }
 
-                const listName = data.name || 'Imported List';
-                const words = data.keywords.filter(k => typeof k === 'string' && k.trim());
+                const listName = (data.name || 'Imported List').slice(0, 100);
+                const words = data.keywords
+                    .filter(k => typeof k === 'string' && k.trim())
+                    .map(k => k.trim())
+                    .slice(0, state.MAX_KEYWORDS_PER_LIST);
 
                 createList(listName, words);
                 switchKeywordList(listName);
-
                 populateListSelector();
-                populateListSelector();
-
-                if (typeof window._performSearch === 'function') {
-                    window._performSearch();
-                }
 
                 alert(`Imported "${listName}" with ${words.length} keywords.`);
             } catch (err) {
                 alert('Failed to parse JSON file: ' + err.message);
             }
-        };
+        });
         reader.readAsText(file);
-    };
+    });
 
     input.click();
 }
 
+export function setupKeywordManager() {
+    dom.kwListSelector?.addEventListener('change', loadListIntoEditor);
+    dom.kwNewListBtn?.addEventListener('click', showNewListDialog);
+    dom.kwDeleteListBtn?.addEventListener('click', deleteCurrentList);
+    dom.kwExportBtn?.addEventListener('click', exportKeywords);
+    dom.kwImportBtn?.addEventListener('click', importKeywords);
+    dom.kwCancelBtn?.addEventListener('click', toggleKeywordManager);
+    dom.kwSaveBtn?.addEventListener('click', saveCurrentList);
+    dom.hideNewListBtn?.addEventListener('click', hideNewListDialog);
+    dom.createNewListBtn?.addEventListener('click', createNewList);
+    dom.newListName?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') createNewList();
+    });
+}
+
+function syncToBus() {
+    setKeywords(KEYWORDS);
+    setKeywordLists(KEYWORD_LISTS);
+    setDefaultListName(DEFAULT_LIST_NAME);
+}
+
 export function initKeywordBridge() {
-    window.KEYWORDS = KEYWORDS;
-    window.KEYWORD_LISTS = KEYWORD_LISTS;
-    window.DEFAULT_LIST_NAME = DEFAULT_LIST_NAME;
-    window.switchKeywordList = switchKeywordList;
-    window.populateListSelector = populateListSelector;
-    window.populateKeywordSelect = populateKeywordSelect;
-    window.toggleKeywordManager = toggleKeywordManager;
-    window.loadListIntoEditor = loadListIntoEditor;
-    window.showNewListDialog = showNewListDialog;
-    window.hideNewListDialog = hideNewListDialog;
-    window.createNewList = createNewList;
-    window.deleteCurrentList = deleteCurrentList;
-    window.exportKeywords = exportKeywords;
-    window.importKeywords = importKeywords;
-    window.saveCurrentList = saveCurrentList;
+    syncToBus();
 }
 
 export function syncKeywordsToWindow() {
-    window.KEYWORDS = KEYWORDS;
-    window.KEYWORD_LISTS = KEYWORD_LISTS;
-    window.DEFAULT_LIST_NAME = DEFAULT_LIST_NAME;
+    syncToBus();
 }

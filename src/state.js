@@ -1,3 +1,5 @@
+const _listeners = {};
+
 export const state = {
     pdfDoc: null,
     currentDocUrl: '',
@@ -58,6 +60,7 @@ export const state = {
     globalSearchDocIndex: 0,
     _gsPos: -1,
 
+    allKeywordMode: false,
     _verboseRAF: null,
 
     MAX_FILE_SIZE: 500 * 1024 * 1024,
@@ -66,4 +69,22 @@ export const state = {
     MAX_KEYWORDS_PER_LIST: 500,
     MAX_KEYWORD_LENGTH: 200,
     MAX_TOTAL_FILES: 1000,
+
+    on(event, cb) {
+        (_listeners[event] ||= []).push(cb);
+        return () => this.off(event, cb);
+    },
+
+    off(event, cb) {
+        const arr = _listeners[event];
+        if (arr) {
+            const i = arr.indexOf(cb);
+            if (i !== -1) arr.splice(i, 1);
+        }
+    },
+
+    emit(event, data) {
+        const arr = _listeners[event];
+        if (arr) arr.slice().forEach(cb => cb(data));
+    },
 };

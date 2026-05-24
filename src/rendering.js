@@ -1,8 +1,9 @@
 import { state } from './state.js';
 import * as dom from './dom.js';
-import { fn } from './cross.js';
+import { fn, KEYWORDS } from './cross.js';
+import { getFileIcon, getFileType } from './file-handler.js';
 
-let _loadDocument, _cycleSearch, _cycleDocSearch, _closeMobileSidebar;
+let _loadDocument, _cycleSearch, _cycleDocSearch, _cycleAllKeywords, _cycleAllDocKeywords, _closeMobileSidebar;
 
 let _pulseInterval = null;
 let _pulseTick = 0;
@@ -45,24 +46,9 @@ export function setCallbacks(cbs) {
     _loadDocument = cbs.loadDocument;
     _cycleSearch = cbs.cycleSearch;
     _cycleDocSearch = cbs.cycleDocSearch;
+    _cycleAllKeywords = cbs.cycleAllKeywords;
+    _cycleAllDocKeywords = cbs.cycleAllDocKeywords;
     _closeMobileSidebar = cbs.closeMobileSidebar;
-}
-
-function getFileIcon(filename) {
-    const type = getFileType(filename);
-    if (type === 'pdf') return '<img src="icons/pdf.svg" width="18" height="18" alt="pdf">';
-    if (type === 'docx' || type === 'doc') return '<img src="icons/docx.svg" width="18" height="18" alt="docx">';
-    if (type === 'zip') return '<img src="icons/zip.svg" width="18" height="18" alt="zip">';
-    return '<svg width="18" height="18" viewBox="0 0 24 24" fill="#757575"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/></svg>';
-}
-
-function getFileType(filename) {
-    const lower = filename.toLowerCase();
-    if (lower.endsWith('.pdf')) return 'pdf';
-    if (lower.endsWith('.docx')) return 'docx';
-    if (lower.endsWith('.doc')) return 'doc';
-    if (lower.endsWith('.zip')) return 'zip';
-    return null;
 }
 
 function getPathParts(file, baseFolderName) {
@@ -207,6 +193,41 @@ function renderTree(node, path = '') {
             countSpan.className = 'tree-count';
             countSpan.textContent = totalMatches;
             countSpan.title = 'Keyword matches';
+
+            countSpan.addEventListener('click', function(e) {
+                e.stopPropagation();
+
+                const onSameDoc = state.currentDocUrl === doc.url;
+
+                if (onSameDoc) {
+                    _closeMobileSidebar();
+                    if (doc.type === 'pdf') _cycleAllKeywords();
+                    else _cycleAllDocKeywords();
+                    renderResultsArea();
+                    return;
+                }
+
+                if (!onSameDoc) {
+                    _loadDocument(doc.url);
+                }
+
+                function tryActivateAndRender() {
+                    const isDocReady = doc.type === 'pdf'
+                        ? !!(state.pdfDoc && state.currentDocUrl === doc.url && state._gsPageCacheReady)
+                        : !!state.docContentCache[doc.url];
+
+                    if (isDocReady) {
+                        _closeMobileSidebar();
+                        if (doc.type === 'pdf') _cycleAllKeywords();
+                        else _cycleAllDocKeywords();
+                        renderResultsArea();
+                    } else {
+                        setTimeout(tryActivateAndRender, 200);
+                    }
+                }
+                tryActivateAndRender();
+            });
+
             fileSpan.appendChild(countSpan);
         }
 
@@ -271,6 +292,30 @@ function renderTree(node, path = '') {
             _loadDocument(doc.url);
             _closeMobileSidebar();
             renderResultsArea();
+
+            if (state.globalSearchQuery) {
+                const tryActivate = () => {
+                    const isDocReady = doc.type === 'pdf'
+                        ? !!(state.pdfDoc && state.currentDocUrl === doc.url && state._gsPageCacheReady)
+                        : !!state.docContentCache[doc.url];
+                    if (isDocReady) {
+                        state.globalSearchActiveDoc = doc.url;
+                        fn.activateGlobalSearch();
+                        const urls = Object.keys(state.globalSearchResults)
+                            .filter(u => state.globalSearchResults[u] > 0)
+                            .sort((a, b) => {
+                                const na = (state.docDataCache[a]?.name || a).toLowerCase();
+                                const nb = (state.docDataCache[b]?.name || b).toLowerCase();
+                                return na.localeCompare(nb);
+                            });
+                        state._gsPos = urls.indexOf(doc.url);
+                        renderResultsArea();
+                    } else {
+                        setTimeout(tryActivate, 200);
+                    }
+                };
+                tryActivate();
+            }
         });
         li.appendChild(fileSpan);
         ul.appendChild(li);
@@ -318,14 +363,36 @@ export function updateStats() {
 }
 
 export function updateSidebarBadge() {
+    const results = state.currentDocType === 'pdf' ? state.searchResults : state.docSearchResults;
+    let currentKeyword = '';
+    let keywordLocalIndex = -1;
+    let keywordTotal = 0;
+
+    if (state.allKeywordMode && state.currentMatchIndex >= 0 && results.length > 0) {
+        const idx = state.currentMatchIndex;
+        const currentResult = results[idx];
+        if (currentResult && currentResult.keyword) {
+            currentKeyword = currentResult.keyword;
+            keywordTotal = results.filter(r => r.keyword === currentKeyword).length;
+            keywordLocalIndex = 0;
+            for (let i = 0; i <= idx; i++) {
+                if (results[i].keyword === currentKeyword) keywordLocalIndex++;
+            }
+        }
+    }
+
     document.querySelectorAll('.kw-grid-cell').forEach(cell => {
         const k = cell.dataset.keyword;
         const total = parseInt(cell.dataset.count) || 0;
-        const isActiveKeyword = k === state.activeKeyword;
         const countSpan = cell.querySelector('.kw-cell-count');
         
-        if (isActiveKeyword && state.currentMatchIndex >= 0) {
-            if (countSpan) countSpan.textContent = `${state.currentMatchIndex + 1}/${total}`;
+        const isActiveKeyword = k === state.activeKeyword;
+        const isAllKeywordActive = state.allKeywordMode && k === currentKeyword;
+
+        if ((isActiveKeyword || isAllKeywordActive) && state.currentMatchIndex >= 0) {
+            const displayTotal = isAllKeywordActive ? keywordTotal : total;
+            const displayIndex = isAllKeywordActive ? keywordLocalIndex : state.currentMatchIndex + 1;
+            if (countSpan) countSpan.textContent = `${displayIndex}/${displayTotal}`;
             cell.classList.add('active');
         } else {
             if (countSpan) countSpan.textContent = total;
@@ -366,16 +433,37 @@ export function updateKeywordGrid(url) {
         }
     }
 
-    const keywords = window.KEYWORDS || [];
+    const keywords = KEYWORDS || [];
     const cells = [];
+
+    let akwCurrentKeyword = '';
+    let akwKeywordLocalIndex = -1;
+    let akwKeywordTotal = 0;
+    const akwResults = state.currentDocType === 'pdf' ? state.searchResults : state.docSearchResults;
+    if (state.allKeywordMode && state.currentMatchIndex >= 0 && akwResults.length > 0) {
+        const idx = state.currentMatchIndex;
+        const cr = akwResults[idx];
+        if (cr && cr.keyword) {
+            akwCurrentKeyword = cr.keyword;
+            akwKeywordTotal = akwResults.filter(r => r.keyword === akwCurrentKeyword).length;
+            akwKeywordLocalIndex = 0;
+            for (let i = 0; i <= idx; i++) {
+                if (akwResults[i].keyword === akwCurrentKeyword) akwKeywordLocalIndex++;
+            }
+        }
+    }
 
     keywords.forEach(k => {
         const count = doc.counts[k] || 0;
         if (count > 0) {
-            const isActive = k === state.activeKeyword;
-            const countText = (isActive && state.currentMatchIndex >= 0) 
-                ? `${state.currentMatchIndex + 1}/${count}` 
-                : count;
+            let isActive = k === state.activeKeyword;
+            let countText = count;
+            if (state.allKeywordMode && state.currentMatchIndex >= 0) {
+                isActive = k === akwCurrentKeyword;
+                if (isActive) countText = `${akwKeywordLocalIndex}/${akwKeywordTotal}`;
+            } else if (isActive && state.currentMatchIndex >= 0) {
+                countText = `${state.currentMatchIndex + 1}/${count}`;
+            }
             cells.push(`<div class="kw-grid-cell${isActive ? ' active' : ''}" data-keyword="${k}" data-count="${count}">
                 <span class="kw-cell-name">${k}</span>
                 <span class="kw-cell-count">${countText}</span>
@@ -390,6 +478,7 @@ export function updateKeywordGrid(url) {
         content.querySelectorAll('.kw-grid-cell').forEach(cell => {
             cell.addEventListener('click', () => {
                 const k = cell.dataset.keyword;
+                state.allKeywordMode = false;
                 _closeMobileSidebar();
                 if (state.currentDocUrl === url) {
                     if (doc?.type === 'pdf') _cycleSearch(k);

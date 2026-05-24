@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import * as dom from './dom.js';
-import { getKeywordRegex } from './keyword-regex.js';
-import { fn } from './cross.js';
+import { getKeywordRegex, normalizeKeywordMatch } from './keyword-regex.js';
+import { fn, pdfjsLib, JSZip, mammoth, KEYWORDS } from './cross.js';
 
 export function getFileType(filename) {
     const lower = filename.toLowerCase();
@@ -12,7 +12,7 @@ export function getFileType(filename) {
     return null;
 }
 
-function getFileIcon(filename) {
+export function getFileIcon(filename) {
     const type = getFileType(filename);
     if (type === 'pdf') return '<img src="icons/pdf.svg" width="18" height="18" alt="pdf">';
     if (type === 'docx' || type === 'doc') return '<img src="icons/docx.svg" width="18" height="18" alt="docx">';
@@ -35,30 +35,13 @@ function truncateFileName(name, maxLen) {
 }
 
 function startVerboseStatus(fileName) {
-    const keywords = window.KEYWORDS || [];
     const nameWithoutExt = fileName.replace(/\.(pdf|docx?)$/i, '');
     const shortName = truncateFileName(nameWithoutExt, 20);
-    if (keywords.length === 0) {
-        dom.statusBar.textContent = 'Scanning ' + shortName + '..';
-        return;
-    }
-    let idx = 0;
-
-    function updateStatus() {
-        dom.statusBar.textContent = 'Scanning ' + shortName + ' for "' + keywords[idx % keywords.length] + '"';
-        idx++;
-        state._verboseRAF = requestAnimationFrame(updateStatus);
-    }
-
-    state._verboseRAF = requestAnimationFrame(updateStatus);
+    dom.statusBar.textContent = 'Scanning ' + shortName + '..';
 }
 
-function stopVerboseStatus() {
-    if (state._verboseRAF) {
-        cancelAnimationFrame(state._verboseRAF);
-        state._verboseRAF = null;
-    }
-}
+function stopVerboseStatus() {}
+
 
 function updateProgressMainThread() {
     state.processed++;
@@ -104,7 +87,7 @@ export async function extractPdfText(arrayBuffer, fileName, id, file) {
         };
 
         const pdfData = new Uint8Array(arrayBuffer);
-        const pdf = await window.pdfjsLib.getDocument({ data: pdfData, ownerDocument: fakeDoc }).promise;
+        const pdf = await pdfjsLib.getDocument({ data: pdfData, ownerDocument: fakeDoc }).promise;
         const numPages = pdf.numPages;
         const pageTextData = [];
 
@@ -112,16 +95,16 @@ export async function extractPdfText(arrayBuffer, fileName, id, file) {
             const page = await pdf.getPage(p);
             const content = await page.getTextContent();
             const vp = page.getViewport({ scale: 1.0 });
-            let pageText = '';
-            for (const item of content.items) pageText += item.str;
+            const pageText = content.items.map(item => item.str).join('');
             const textItems = [];
             for (const item of content.items) {
                 textItems.push({ text: item.str, transform: item.transform, width: item.width, height: item.height });
             }
             pageTextData.push({ text: pageText, viewport: { width: vp.width, height: vp.height }, items: textItems });
+            if (numPages > 1) dom.statusBar.textContent = 'Extracting pages: ' + p + '/' + numPages;
         }
 
-        const keywords = window.KEYWORDS || [];
+        const keywords = KEYWORDS || [];
         const combinedRegex = getKeywordRegex(keywords);
         const counts = {};
         let totalMatches = 0;
@@ -132,10 +115,8 @@ export async function extractPdfText(arrayBuffer, fileName, id, file) {
                 let match;
                 const regex = new RegExp(combinedRegex.source, 'gi');
                 while ((match = regex.exec(text)) !== null) {
-                    if (match[0].length < 3) continue;
-                    if (!/[a-zA-Z]/.test(match[0])) continue;
-                    const lower = match[0].toLowerCase();
-                    const key = keywords.find(k => k.toLowerCase() === lower) || lower;
+                    const key = normalizeKeywordMatch(match, keywords);
+                    if (!key) continue;
                     counts[key] = (counts[key] || 0) + 1;
                     totalMatches++;
                 }
@@ -156,7 +137,7 @@ export async function extractPdfText(arrayBuffer, fileName, id, file) {
 
         fn.renderCard(fileName, counts, id, file);
         state.totalMatchesFound += totalMatches;
-        fn.updateStats();
+        state.emit('stats-changed');
 
         return pdfCacheEntry;
     } catch (err) {
@@ -171,9 +152,9 @@ export async function extractDocText(arrayBuffer, fileName, id, file) {
         let plainText = '';
 
         if (type === 'docx' || type === 'doc') {
-            const htmlResult = await window.mammoth.convertToHtml({ arrayBuffer });
+            const htmlResult = await mammoth.convertToHtml({ arrayBuffer });
             htmlContent = htmlResult.value;
-            const textResult = await window.mammoth.extractRawText({ arrayBuffer });
+            const textResult = await mammoth.extractRawText({ arrayBuffer });
             plainText = textResult.value.replace(/\s+/g, ' ').trim();
         }
 
@@ -183,7 +164,7 @@ export async function extractDocText(arrayBuffer, fileName, id, file) {
             return;
         }
 
-        const keywords = window.KEYWORDS || [];
+        const keywords = KEYWORDS || [];
         const combinedRegex = getKeywordRegex(keywords);
         const counts = {};
         let totalMatches = 0;
@@ -192,10 +173,8 @@ export async function extractDocText(arrayBuffer, fileName, id, file) {
         if (combinedRegex) {
             const regex = new RegExp(combinedRegex.source, 'gi');
             while ((match = regex.exec(plainText)) !== null) {
-                if (match[0].length < 3) continue;
-                if (!/[a-zA-Z]/.test(match[0])) continue;
-                const lower = match[0].toLowerCase();
-                const key = keywords.find(k => k.toLowerCase() === lower) || lower;
+                const key = normalizeKeywordMatch(match, keywords);
+                if (!key) continue;
                 counts[key] = (counts[key] || 0) + 1;
                 totalMatches++;
             }
@@ -216,7 +195,7 @@ export async function extractDocText(arrayBuffer, fileName, id, file) {
 
         fn.renderCard(fileName, counts, id, file);
         state.totalMatchesFound += totalMatches;
-        fn.updateStats();
+        state.emit('stats-changed');
 
         return docxCacheEntry;
     } catch (err) {
@@ -255,7 +234,7 @@ async function processFiles(files) {
         fn.loadDocument(url);
 
         state.processed = 1;
-        fn.updateStats();
+        state.emit('stats-changed');
         return;
     }
 
@@ -272,7 +251,7 @@ async function processFiles(files) {
         if (file.size > sizeLimit) {
             showFileError(file.name, 'Skipped (' + (file.size / 1024 / 1024).toFixed(1) + ' MB exceeds limit)');
             updateProgressMainThread();
-            fn.updateStats();
+            state.emit('stats-changed');
             continue;
         }
 
@@ -306,7 +285,7 @@ async function processFiles(files) {
             }
             stopVerboseStatus();
             updateProgressMainThread();
-            fn.updateStats();
+            state.emit('stats-changed');
         }
     }
 
@@ -413,7 +392,7 @@ async function extractAllFromZip(zipFile) {
 
     let zip;
     try {
-        zip = await window.JSZip.loadAsync(zipFile);
+        zip = await JSZip.loadAsync(zipFile);
     } catch (err) {
         showFileError(zipFile.name, 'Failed to open ZIP: ' + (err.message || err));
         return [];
@@ -480,10 +459,53 @@ async function extractAllFromZip(zipFile) {
     return extracted;
 }
 
-dom.sidebar.addEventListener('drop', (e) => {
-    e.preventDefault();
-    handleDrop(e);
-});
+export function initFileHandler() {
+    dom.sidebar.addEventListener('drop', (e) => {
+        e.preventDefault();
+        handleDrop(e);
+    });
+
+    dom.folderInput.addEventListener('change', async (e) => {
+        const viewerMsg = document.getElementById('viewerDropMsg');
+        if (viewerMsg) viewerMsg.style.display = 'none';
+        const statusMsgs = dom.resultsArea.querySelectorAll('.status-msg');
+        statusMsgs.forEach(el => el.remove());
+
+        let filesToProcess = [];
+        const items = Array.from(e.target.files);
+        const hasZip = items.some(f => f.name.toLowerCase().endsWith('.zip'));
+        const folderName = items.length > 0 ? (items[0].webkitRelativePath || '').split('/')[0] : '';
+
+        if (hasZip) {
+            dom.statusBar.textContent = 'Processing ZIP file...';
+            dom.progressBar.style.width = '0%';
+        } else if (folderName) {
+            dom.statusBar.textContent = 'Reading folder "' + folderName + '"...';
+            dom.progressBar.style.width = '0%';
+        }
+
+        for (const file of items) {
+            const type = getFileType(file.name);
+            if (file.name.toLowerCase().endsWith('.zip')) {
+                try {
+                    filesToProcess = filesToProcess.concat(await extractAllFromZip(file));
+                } catch (err) {
+                    showFileError(file.name, 'Failed to process ZIP: ' + (err.message || err));
+                }
+            } else if (type) {
+                file.relativePath = file.webkitRelativePath || file.name;
+                filesToProcess.push(file);
+            }
+        }
+
+        if (filesToProcess.length === 0) {
+            dom.statusBar.textContent = 'No supported files found';
+            dom.progressBar.style.width = '0%';
+        } else {
+            processFiles(filesToProcess);
+        }
+    });
+}
 
 export async function rescanAllDocuments() {
     const viewerMsg = document.getElementById('viewerDropMsg');
@@ -500,7 +522,7 @@ export async function rescanAllDocuments() {
     state.totalFiles = state.objectUrls.length;
 
     initWorkerPool();
-    const keywords = window.KEYWORDS || [];
+    const keywords = KEYWORDS || [];
     let failedCount = 0;
 
     for (let i = 0; i < state.objectUrls.length; i++) {
@@ -557,7 +579,7 @@ export async function rescanAllDocuments() {
         dom.progressBar.style.width = pct + '%';
     }
 
-    fn.updateStats();
+    state.emit('stats-changed');
 
     if (failedCount > 0) {
         dom.statusBar.textContent = failedCount + ' document(s) failed during rescan';
@@ -572,7 +594,7 @@ export async function rescanWithNewKeywords() {
     if (!state.pdfDoc || !state.currentDocUrl) return;
 
     initWorkerPool();
-    const keywords = window.KEYWORDS || [];
+    const keywords = KEYWORDS || [];
 
     let fullText = '';
     for (let p = 1; p <= state.totalPages; p++) {
@@ -592,7 +614,7 @@ export async function rescanWithNewKeywords() {
         }
 
         state.totalMatchesFound = totalMatches;
-        fn.updateStats();
+        state.emit('stats-changed');
         fn.precomputeAllSearches();
         if (state.currentDocUrl) fn.updateKeywordGrid(state.currentDocUrl);
     } catch (err) {
@@ -600,43 +622,4 @@ export async function rescanWithNewKeywords() {
     }
 }
 
-dom.folderInput.addEventListener('change', async (e) => {
-    const viewerMsg = document.getElementById('viewerDropMsg');
-    if (viewerMsg) viewerMsg.style.display = 'none';
-    const statusMsgs = dom.resultsArea.querySelectorAll('.status-msg');
-    statusMsgs.forEach(el => el.remove());
 
-    let filesToProcess = [];
-    const items = Array.from(e.target.files);
-    const hasZip = items.some(f => f.name.toLowerCase().endsWith('.zip'));
-    const folderName = items.length > 0 ? (items[0].webkitRelativePath || '').split('/')[0] : '';
-
-    if (hasZip) {
-        dom.statusBar.textContent = 'Processing ZIP file...';
-        dom.progressBar.style.width = '0%';
-    } else if (folderName) {
-        dom.statusBar.textContent = 'Reading folder "' + folderName + '"...';
-        dom.progressBar.style.width = '0%';
-    }
-
-    for (const file of items) {
-        const type = getFileType(file.name);
-        if (file.name.toLowerCase().endsWith('.zip')) {
-            try {
-                filesToProcess = filesToProcess.concat(await extractAllFromZip(file));
-            } catch (err) {
-                showFileError(file.name, 'Failed to process ZIP: ' + (err.message || err));
-            }
-        } else if (type) {
-            file.relativePath = file.webkitRelativePath || file.name;
-            filesToProcess.push(file);
-        }
-    }
-
-    if (filesToProcess.length === 0) {
-        dom.statusBar.textContent = 'No supported files found';
-        dom.progressBar.style.width = '0%';
-    } else {
-        processFiles(filesToProcess);
-    }
-});

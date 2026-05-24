@@ -25,8 +25,16 @@ await esbuild.build({
     define: { 'process.env.NODE_ENV': '"production"' },
 });
 
+function copy(src, dest) { fs.cpSync(path.join(__dirname, src), path.join(dist, dest), { recursive: true }); }
+
+copy('src/style.css', 'style.css');
+copy('src/manifest.json', 'manifest.json');
+copy('keywords.json', 'keywords.json');
+copy('icons', 'icons');
+
 const bundleHash = crypto.createHash('md5')
     .update(fs.readFileSync(path.join(dist, 'bundle.js')))
+    .update(fs.readFileSync(path.join(dist, 'style.css')))
     .digest('hex')
     .slice(0, 8);
 
@@ -35,13 +43,6 @@ bundle = bundle.replaceAll('__BUNDLE_HASH__', bundleHash).replaceAll('__COMMIT_D
 bundle = bundle.replaceAll('"src/doc_processor_worker.js"', '"utils/doc_processor_worker.js"')
                .replaceAll('"src/ocr_worker.js?h=', '"utils/ocr_worker.js?h=');
 fs.writeFileSync(path.join(dist, 'bundle.js'), bundle);
-
-function copy(src, dest) { fs.cpSync(path.join(__dirname, src), path.join(dist, dest), { recursive: true }); }
-
-copy('src/style.css', 'style.css');
-copy('src/manifest.json', 'manifest.json');
-copy('keywords.json', 'keywords.json');
-copy('icons', 'icons');
 
 let html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 html = html.replaceAll('dist/', '');

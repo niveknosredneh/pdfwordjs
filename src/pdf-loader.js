@@ -113,6 +113,7 @@ function loadPDF(fileUrl, keyword = '') {
                     state.textPageCache[i + 1] = cached.pages[i];
                 }
                 dom.loaderProgressFill.style.width = '80%';
+                fn.rebuildTextLayers();
                 await fn.precomputeAllSearches();
                 state._gsPageCacheReady = true;
 

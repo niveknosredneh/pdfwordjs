@@ -31,6 +31,7 @@ register('isPageRendered', pdfRenderer.isPageRendered);
 register('renderPageNow', pdfRenderer.renderPageNow);
 register('setZoom', pdfRenderer.setZoom);
 register('startPrerender', pdfRenderer.startPrerender);
+register('rebuildTextLayers', pdfRenderer.rebuildTextLayers);
 register('setRenderQuality', pdfRenderer.setRenderQuality);
 
 register('precomputeAllSearches', pdfSearch.precomputeAllSearches);

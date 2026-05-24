@@ -9,6 +9,14 @@ state.renderedScales = {};
 
 const LOW_RES_SCALE = 0.2;
 
+function getCanvasContext(canvas) {
+    try {
+        return canvas.getContext('2d', { alpha: false });
+    } catch (e) {
+        return canvas.getContext('2d');
+    }
+}
+
 let renderGen = 0;
 let _rendering = false;
 let _needsRefresh = false;
@@ -216,24 +224,12 @@ export async function renderPageNow(pageNum, forceScale = null) {
         }
 
         const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d', { alpha: false });
+        const ctx = getCanvasContext(canvas);
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         canvas.style.width = displayWidth + 'px';
         canvas.style.height = displayHeight + 'px';
         canvas.dataset.scale = renderScale;
-
-        if (!state.textPageCache[pageNum]) {
-            page.getTextContent().then(textContent => {
-                const { text, items } = processTextContent(textContent);
-                state.textPageCache[pageNum] = {
-                    text,
-                    viewport: { width: vp1.width, height: vp1.height, offsetX: vp1.offsetX, offsetY: vp1.offsetY },
-                    items
-                };
-                state.pageHeights[pageNum] = vp1.height;
-            }).catch(() => {});
-        }
 
         const renderTask = page.render({ canvasContext: ctx, viewport: viewport });
         state.renderTasks.set(pageNum, renderTask);
@@ -255,8 +251,37 @@ export async function renderPageNow(pageNum, forceScale = null) {
             requestAnimationFrame(() => buildTextLayer(el, pageNum, renderScale, displayHeight));
             if (!forceScale && state.searchResults.length > 0) fn.renderHighlightsForPage(pageNum);
         }
+
+        // Fire-and-forget text content fetch for text layer & highlights.
+        // On resolve, rebuild text layer & highlights if page is still displayed.
+        if (!state.textPageCache[pageNum]) {
+            page.getTextContent().then(textContent => {
+                const { text, items } = processTextContent(textContent);
+                state.textPageCache[pageNum] = {
+                    text,
+                    viewport: { width: vp1.width, height: vp1.height, offsetX: vp1.offsetX, offsetY: vp1.offsetY },
+                    items
+                };
+                state.pageHeights[pageNum] = vp1.height;
+
+                const pe = document.getElementById('page-' + pageNum);
+                if (pe && pe.isConnected && pe.querySelector('canvas')) {
+                    const cv = pe.querySelector('canvas');
+                    const s = parseFloat(cv.dataset.scale) || state.currentScale;
+                    const dh = parseFloat(cv.style.height) || (state.pageHeights[pageNum] * s);
+                    requestAnimationFrame(() => buildTextLayer(pe, pageNum, s, dh));
+                    if (state.searchResults.length > 0) fn.renderHighlightsForPage(pageNum);
+                }
+            }).catch(() => {});
+        }
     } catch (err) {
-        if (err.name !== 'RenderingCancelledException') console.warn('Render error:', err.message);
+        if (err.name !== 'RenderingCancelledException') {
+            console.warn('Render error:', err.message);
+            const pe = document.getElementById('page-' + pageNum);
+            if (pe) {
+                pe.innerHTML = '<div class="page-error" style="padding:20px;text-align:center;color:var(--grey-500)">Render error: ' + err.message + '</div>';
+            }
+        }
     } finally {
         state.renderTasks.delete(pageNum);
     }
@@ -395,10 +420,29 @@ export function setZoom(newScale, force = false) {
     });
 }
 
+// ── rebuild text layers after cache population ──
+
+export function rebuildTextLayers() {
+    for (const pageNum of state.renderedPages) {
+        const el = document.getElementById('page-' + pageNum);
+        if (!el || !el.isConnected) continue;
+        const canvas = el.querySelector('canvas');
+        if (!canvas) continue;
+        if (!state.textPageCache[pageNum]) continue;
+
+        const s = parseFloat(canvas.dataset.scale) || state.currentScale;
+        const displayHeight = parseFloat(canvas.style.height) || (state.pageHeights[pageNum] * s);
+
+        requestAnimationFrame(() => buildTextLayer(el, pageNum, s, displayHeight));
+        if (state.searchResults.length > 0) fn.renderHighlightsForPage(pageNum);
+    }
+}
+
 // ── search result pre-render ──
 
 export function startPrerender() {
     if (state.searchResults.length === 0) return;
+    if (_rendering) return;
 
     const pagesWithMatches = [...new Set(state.searchResults.map(r => r.page))];
 

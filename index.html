@@ -8,7 +8,9 @@
     <link rel="stylesheet" href="dist/style.css">
     <link rel="manifest" href="dist/manifest.json">
     <link rel="icon" href="dist/icons/favicon.ico">
-    <link rel="preload" href="fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('service_worker.js')
@@ -48,13 +50,16 @@
 
     
     <div id="results" class="results-area">
-        <h1 class="status-msg">
-        <img src="dist/icons/folder.svg" width="32" height="32" alt="folder">
-        <img src="dist/icons/pdf.svg" width="32" height="32" alt="pdf">
-        <img src="dist/icons/docx.svg" width="32" height="32" alt="docx">
-        <img src="dist/icons/zip.svg" width="32" height="32" alt="zip">
-        </h1>
-        <h2 class="status-msg">Drop here to begin scanning</h2>
+        <div class="drop-zone-empty">
+            <div class="drop-zone-empty-icon">
+                <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M24 4L24 32M24 4L16 12M24 4L32 12"/>
+                    <path d="M8 28L8 40C8 41.1 8.9 42 10 42L38 42C39.1 42 40 41.1 40 40L40 28"/>
+                </svg>
+            </div>
+            <h2 class="drop-zone-empty-title">Drop files to begin scanning</h2>
+            <p class="drop-zone-empty-text">PDF &middot; DOCX &middot; ZIP &mdash; any folder or archive</p>
+        </div>
     </div>
 
     <div id="keyword-grid-panel" class="keyword-grid-panel">
@@ -109,10 +114,16 @@
     </div>
 
     <div class="viewer-scroll" id="viewerScroll">
-        <div id="viewerDropMsg">
-        <h2>&#10548; Drop a folder to begin scanning</h2>
-        <p></p>
-    </div>
+        <div id="viewerDropMsg" class="drop-zone-viewer">
+            <div class="drop-zone-viewer-icon">
+                <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M24 4L24 32M24 4L16 12M24 4L32 12"/>
+                    <path d="M8 28L8 40C8 41.1 8.9 42 10 42L38 42C39.1 42 40 41.1 40 40L40 28"/>
+                </svg>
+            </div>
+            <h2 class="drop-zone-viewer-title">Drop files to begin scanning</h2>
+            <p class="drop-zone-viewer-text">PDF &middot; DOCX &middot; ZIP &mdash; any folder or archive</p>
+        </div>
         <div id="viewerLoader" aria-live="polite">
             <div class="spinner"></div>
             <div class="loader-details">

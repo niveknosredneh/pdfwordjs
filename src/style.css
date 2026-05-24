@@ -1,18 +1,10 @@
-@font-face {
-    font-family: 'Inter';
-    src: url('../fonts/InterVariable.woff2') format('woff2-variations');
-    font-weight: 100 900;
-    font-style: normal;
-    font-display: swap;
-}
-
 :root {
     color-scheme: light;
     --sidebar-width: 320px;
-    --accent: #65a30d;
-    --accent-light: #84cc16;
-    --accent-bg: rgba(101, 163, 13, 0.15);
-    --accent-hover: rgba(101, 163, 13, 0.25);
+    --accent: #d97706;
+    --accent-light: #fbbf24;
+    --accent-bg: rgba(217, 119, 6, 0.15);
+    --accent-hover: rgba(217, 119, 6, 0.25);
     --green: var(--accent);
     --green-light: var(--accent-light);
     --green-bg: var(--accent-bg);
@@ -45,10 +37,10 @@
 
 [data-theme="dark"] {
     color-scheme: dark;
-    --accent: #a3e635;
-    --accent-light: #bef264;
-    --accent-bg: rgba(163, 230, 53, 0.15);
-    --accent-hover: rgba(163, 230, 53, 0.25);
+    --accent: #fbbf24;
+    --accent-light: #fcd34d;
+    --accent-bg: rgba(251, 191, 36, 0.15);
+    --accent-hover: rgba(251, 191, 36, 0.25);
     --green: var(--accent);
     --green-light: var(--accent-light);
     --green-bg: var(--accent-bg);
@@ -94,7 +86,7 @@ html.transitioning *::after {
 * { box-sizing: border-box; touch-action: manipulation; }
 
 body {
-    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
     margin: 0;
     display: flex;
     height: 100vh;
@@ -129,8 +121,19 @@ input, select, button, textarea {
 
 #resizer {
     width: 6px; cursor: col-resize; background: var(--grey-700); transition: background 0.2s;
-    z-index: 10; flex-shrink: 0;
+    z-index: 10; flex-shrink: 0; position: relative;
 }
+#resizer::after {
+    content: ''; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 2px; height: 24px;
+    background: var(--grey-500);
+    border-radius: 1px; opacity: 0.2;
+    transition: opacity 0.2s;
+    box-shadow: -5px 0 0 var(--grey-500), 5px 0 0 var(--grey-500);
+    pointer-events: none;
+}
+#resizer:hover::after { opacity: 0.5; }
 #resizer:hover, body.dragging #resizer { background: var(--grey-600); }
 
 .viewer-container {
@@ -198,10 +201,28 @@ input, select, button, textarea {
     font-size: 0.75rem; display: flex; justify-content: space-between; color: var(--grey-400);
 }
 
-.status-bar { font-size: 0.65rem; font-weight: 350; color: var(--grey-400); margin-top: 1px; padding: 0 1px; min-height: 18px; font-family: 'Inter', sans-serif; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; display: flex; justify-content: space-between; }
+.status-bar { font-size: 0.65rem; font-weight: 350; color: var(--grey-400); margin-top: 1px; padding: 0 1px; min-height: 18px; font-family: 'DM Sans', sans-serif; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; display: flex; justify-content: space-between; }
 #progressBar { width: 100%; height: 2px; background: var(--grey-700); overflow: hidden; flex-shrink: 0; }
 #progressBarFill { height: 100%; background: var(--accent); width: 0%; transition: width 0.15s; }
-#viewerDropMsg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--grey-500); font-size: 1.1rem; text-align: center; pointer-events: none; opacity: 0.5; }
+.drop-zone-viewer {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 48px 40px; text-align: center; pointer-events: none;
+    border: 2px dashed var(--grey-600); border-radius: 16px;
+    min-width: 280px; min-height: 200px;
+    transition: border-color 0.4s ease;
+    animation: drop-zone-pulse 4s ease-in-out infinite;
+}
+.drop-zone-viewer-icon {
+    width: 56px; height: 56px; color: var(--grey-500); margin-bottom: 16px; opacity: 0.5;
+}
+.drop-zone-viewer-icon svg { width: 100%; height: 100%; }
+.drop-zone-viewer-title {
+    font-size: 1.1rem; font-weight: 600; color: var(--grey-400); margin: 0 0 6px 0;
+}
+.drop-zone-viewer-text {
+    font-size: 0.85rem; color: var(--grey-500); margin: 0;
+}
 
 /* ── Sidebar Search ── */
 
@@ -499,8 +520,8 @@ input, select, button, textarea {
 .kw-grid-cell:hover {
     background: var(--grey-700);
     border-color: var(--accent-light);
-    transform: translateY(-1.5px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.35);
 }
 .kw-grid-cell.active {
     background: var(--accent-bg);
@@ -708,7 +729,7 @@ input, select, button, textarea {
     color: transparent; position: absolute; white-space: pre; cursor: text;
     transform-origin: 0% 0%; pointer-events: auto; user-select: text;
     -webkit-user-select: text;
-    font-family: 'Inter', sans-serif;
+    font-family: 'DM Sans', sans-serif;
 }
 .textLayer ::selection { background: rgba(0, 0, 255, 0.3); }
 
@@ -822,10 +843,10 @@ input, select, button, textarea {
 .m-line { transform-origin: 0 50%; }
 .measure-tick { position: absolute; pointer-events: none; z-index: 6; transform-origin: 50% 50%; }
 .measure-tick-pending { position: absolute; pointer-events: none; z-index: 6; transform-origin: 50% 50%; background: var(--accent); }
-.measure-label { position: absolute; font-size: 15px; background: rgba(255,255,255,0.3); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); padding: 1px 5px; border-radius: 3px; z-index: 7; white-space: nowrap; font-family: 'Inter', sans-serif; border: 1px solid; pointer-events: auto; }
+.measure-label { position: absolute; font-size: 15px; background: rgba(255,255,255,0.3); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); padding: 1px 5px; border-radius: 3px; z-index: 7; white-space: nowrap; font-family: 'DM Sans', sans-serif; border: 1px solid; pointer-events: auto; }
 .measure-fill { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
 .measure-line-ghost { position: absolute; pointer-events: none; z-index: 5; border-top: 2px dashed rgba(0, 200, 255, 0.85); height: 0; background: none; transform-origin: 0 50%; }
-.measure-label-ghost { position: absolute; font-size: 15px; background: rgba(255,255,255,0.3); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); padding: 1px 5px; border-radius: 3px; z-index: 7; white-space: nowrap; font-family: 'Inter', sans-serif; border: 1px solid rgba(0, 200, 255, 0.5); pointer-events: auto; color: #000; }
+.measure-label-ghost { position: absolute; font-size: 15px; background: rgba(255,255,255,0.3); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); padding: 1px 5px; border-radius: 3px; z-index: 7; white-space: nowrap; font-family: 'DM Sans', sans-serif; border: 1px solid rgba(0, 200, 255, 0.5); pointer-events: auto; color: #000; }
 .measure-fill-ghost { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; background: rgba(0, 200, 255, 0.12); }
 .measure-highlight {
     transition: all 0.15s ease;
@@ -1149,8 +1170,28 @@ input, select, button, textarea {
 .btn-icon:disabled { opacity: 0.35; cursor: default; pointer-events: none; }
 .btn-icon-danger:hover { background: rgba(239,68,68,0.15); color: #ef4444; }
 
-.status-msg { text-align: center; color: var(--grey-500); margin-top: 20px; opacity: 0.5; }
-.status-msg img { display: inline-block; margin: 0 4px; vertical-align: middle; opacity: 0.5;}
+.drop-zone-empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; min-height: 200px; padding: 32px 24px; text-align: center;
+    border: 2px dashed var(--grey-600); border-radius: 14px;
+    box-sizing: border-box;
+    transition: border-color 0.4s ease, background 0.3s ease;
+    animation: drop-zone-pulse 4s ease-in-out infinite;
+}
+.drop-zone-empty-icon {
+    width: 52px; height: 52px; color: var(--grey-500); margin-bottom: 14px; opacity: 0.5;
+}
+.drop-zone-empty-icon svg { width: 100%; height: 100%; }
+.drop-zone-empty-title {
+    font-size: 1rem; font-weight: 600; color: var(--grey-400); margin: 0 0 4px 0;
+}
+.drop-zone-empty-text {
+    font-size: 0.8rem; color: var(--grey-500); margin: 0;
+}
+@keyframes drop-zone-pulse {
+    0%, 100% { border-color: var(--grey-600); }
+    50% { border-color: var(--accent-light); }
+}
 
 .dim { font-size: 0.7rem; font-weight: 350; color: var(--grey-500); }
 .small { width: 70px; padding: 4px; font-size: 0.8rem; }
@@ -1215,6 +1256,35 @@ input, select, button, textarea {
 [data-theme="dark"] body.dragging #resizer {
     background: var(--grey-500);
 }
+
+/* ── Noise Texture Overlay ── */
+
+body::before {
+    content: ''; position: fixed; inset: 0; z-index: 9999;
+    pointer-events: none; opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+    background-repeat: repeat; background-size: 256px 256px;
+}
+
+/* ── Custom Scrollbars ── */
+
+.results-area::-webkit-scrollbar,
+.viewer-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+
+.results-area::-webkit-scrollbar-track,
+.viewer-scroll::-webkit-scrollbar-track { background: transparent; }
+
+.results-area::-webkit-scrollbar-thumb,
+.viewer-scroll::-webkit-scrollbar-thumb {
+    background: var(--grey-600); border-radius: 3px;
+    transition: background 0.2s;
+}
+.results-area::-webkit-scrollbar-thumb:hover,
+.viewer-scroll::-webkit-scrollbar-thumb:hover { background: var(--grey-500); }
+
+.kw-grid-content::-webkit-scrollbar { width: 4px; }
+.kw-grid-content::-webkit-scrollbar-track { background: transparent; }
+.kw-grid-content::-webkit-scrollbar-thumb { background: var(--grey-600); border-radius: 2px; }
 
 /* ── Mobile ── */
 

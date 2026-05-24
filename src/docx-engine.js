@@ -146,6 +146,15 @@ export function loadDocxDoc(fileUrl, keyword = '') {
 
             startDocSearchComputation();
 
+            if (!keyword) {
+                const counts = state.searchCache._docCounts;
+                if (counts) {
+                    for (const [k, v] of Object.entries(counts)) {
+                        if (v > 0) { keyword = k; break; }
+                    }
+                }
+            }
+
             if (keyword) cycleDocSearch(keyword);
         } catch (err) {
             dom.loaderFilename.textContent = 'Error loading document';

@@ -30,6 +30,7 @@ export function clearSearch() {
     dom.navSep.style.display = 'none';
     fn.clearHighlights();
     dom.keywordSelect.value = '';
+    dom.keywordSelect.innerHTML = '';
     dom.matchInput.value = '';
     dom.matchTotal.textContent = '0';
     state.emit('badge-changed');
@@ -522,7 +523,7 @@ export function updateToolbarState() {
     const hasResults = (state.currentDocType === 'pdf' ? state.searchResults.length : state.docSearchResults.length) > 0;
 
     dom.searchToggleBtn.disabled = !hasDoc;
-    dom.keywordSelect.disabled = !hasResults;
+    dom.keywordSelect.disabled = !hasDoc || dom.keywordSelect.options.length === 0;
     dom.findPrevBtn.disabled = !hasResults;
     dom.findNextBtn.disabled = !hasResults;
     dom.clearSearchBtn.disabled = !hasResults && !state.activeKeyword;

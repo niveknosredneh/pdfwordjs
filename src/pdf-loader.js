@@ -149,6 +149,16 @@ function loadPDF(fileUrl, keyword = '') {
 
             state.emit('results-changed');
 
+            if (!keyword) {
+                const entries = Object.entries(state.searchCache);
+                for (const [k, v] of entries) {
+                    if (k !== '_deduplicated' && v.length > 0) {
+                        keyword = k;
+                        break;
+                    }
+                }
+            }
+
             if (keyword) fn.performSearch(keyword);
         } catch (err) {
             dom.loaderFilename.textContent = 'Error loading PDF';

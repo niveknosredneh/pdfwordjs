@@ -147,11 +147,15 @@ export function populateListSelector() {
 
 export function populateKeywordSelect() {
     dom.keywordSelect.innerHTML = '';
+    const isDocx = state.currentDocType !== 'pdf';
     KEYWORDS.forEach(k => {
-        if (state.searchCache[k] && state.searchCache[k].length > 0) {
+        const count = isDocx
+            ? (state.searchCache._docCounts?.[k] || 0)
+            : (state.searchCache[k]?.length || 0);
+        if (count > 0) {
             const opt = document.createElement('option');
             opt.value = k;
-            opt.textContent = `${k} (${state.searchCache[k].length})`;
+            opt.textContent = `${k} (${count})`;
             if (k === state.activeKeyword) opt.selected = true;
             dom.keywordSelect.appendChild(opt);
         }

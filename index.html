@@ -38,6 +38,7 @@
         </div>
         <div class="sidebar-search">
             <div class="sidebar-search-row">
+                <span class="global-search-icon">⌕</span>
                 <input type="text" id="globalSearchInput" class="global-search-input" placeholder="Search all files..." autocomplete="off">
                 <button class="btn-icon gs-nav-btn" id="gsPrevBtn" title="Previous match" aria-label="Previous match">&#8592;</button>
                 <button class="btn-icon gs-nav-btn" id="gsNextBtn" title="Next match" aria-label="Next match">&#8594;</button>
@@ -102,28 +103,32 @@
         </div>
         <div class="toolbar-section toolbar-keyword" id="navGroup">
             <div class="toolbar-row">
-                <button id="searchToggleBtn" class="search-toggle-btn" title="Search (Ctrl+F)" aria-label="Search (Ctrl+F)">⌕</button>
-                <input type="number" class="match-input small" id="matchInput" min="1" placeholder="0" title="Go to match number">
-                <span class="dim">/ <span id="matchTotal">0</span></span>
-            </div>
-            <div class="toolbar-row">
-                <span class="separator" id="navSep" style="display:none;">|</span>
                 <select class="keyword-select small" id="keywordSelect" title="Keyword"></select>
                 <button id="findPrevBtn" title="Previous match" aria-label="Previous match">&#8592;</button>
                 <button id="findNextBtn" title="Next match" aria-label="Next match">&#8594;</button>
                 <button id="clearSearchBtn" class="nav-clear" title="Clear search" aria-label="Clear search">&#10005;</button>
+            </div>
+            <div class="toolbar-row">
+                <div class="search-input-wrapper">
+                    <span class="search-icon">⌕</span>
+                    <input type="text" id="inlineSearchInput" class="inline-search-input" placeholder="Find..." title="Search (Ctrl+F)" autocomplete="off">
+                    <button id="inlineSearchClear" class="inline-search-clear" title="Clear search" aria-label="Clear search" tabindex="-1">&#10005;</button>
+                </div>
+                <span class="separator" id="navSep" style="display:none;">|</span>
+                <input type="number" class="match-input small" id="matchInput" min="1" placeholder="0" title="Go to match number">
+                <span class="dim">/ <span id="matchTotal">0</span></span>
             </div>
         </div>
         <div class="toolbar-section toolbar-measure" id="measureSection">
             <div class="toolbar-row">
                 <button id="calibrateScaleBtn" title="Calibrate scale (click two points on a known dimension)" aria-label="Calibrate scale (click two points on a known dimension)">&#9878;</button>
                 <input type="text" class="scale-input small" id="scaleInput" value="1:100" placeholder="1:XXX" title="Scale 1:X">
+                <button id="clearMeasureBtn" title="Clear all measurements" aria-label="Clear all measurements">&#10005;</button>
             </div>
             <div class="toolbar-row">
                 <button id="measureDistBtn" title="Measure distance" aria-label="Measure distance">&#8597;</button>
                 <button id="measurePerimBtn" title="Polyline (click points, dbl-click/Enter to finish)" aria-label="Polyline (click points, dbl-click/Enter to finish)">&#8629;</button>
                 <button id="measureAreaBtn" title="Area (click points, dbl-click/Enter to close)" aria-label="Area (click points, dbl-click/Enter to close)">&#9633;</button>
-                <button id="clearMeasureBtn" title="Clear all measurements" aria-label="Clear all measurements">&#10005;</button>
             </div>
         </div>
     </div>

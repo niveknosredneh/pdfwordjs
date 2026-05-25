@@ -10,6 +10,8 @@ state.smoothScrollEnabled = false;
 state.mobileSidebarOpen = false;
 state.settingsOpen = false;
 state.settingsJustToggled = false;
+state.inlineSearchActive = false;
+state.inlineSearchQuery = '';
 
 let searchOverlay = null;
 let searchOverlayInput = null;
@@ -17,6 +19,8 @@ let searchOverlayResults = null;
 let searchPreviousFocus = null;
 let customSearchResults = [];
 let customSearchIndex = 0;
+let _savedKeyword = '';
+let _savedKeywordMode = false;
 
 export function clearSearch() {
     state.allKeywordMode = false;
@@ -26,6 +30,10 @@ export function clearSearch() {
     state.searchResults = [];
     state.searchResultsByPage = {};
     state.currentMatchIndex = -1;
+    state.inlineSearchActive = false;
+    state.inlineSearchQuery = '';
+    _savedKeyword = '';
+    _savedKeywordMode = false;
     dom.navGroup.classList.remove('active');
     dom.navSep.style.display = 'none';
     fn.clearHighlights();
@@ -33,6 +41,10 @@ export function clearSearch() {
     dom.keywordSelect.innerHTML = '';
     dom.matchInput.value = '';
     dom.matchTotal.textContent = '0';
+    if (dom.inlineSearchInput) {
+        dom.inlineSearchInput.value = '';
+    }
+    updateInlineSearchClearBtn();
     state.emit('badge-changed');
     state.emit('heatmaps-changed');
     updateToolbarState();
@@ -128,7 +140,23 @@ function initSearchOverlay() {
 
 function updateHeatmap() {}
 
-export function showSearchOverlay() {
+function updateInlineSearchClearBtn() {
+    if (!dom.inlineSearchInput || !dom.inlineSearchClear) return;
+    const hasValue = dom.inlineSearchInput.value.length > 0;
+    dom.inlineSearchClear.classList.toggle('visible', hasValue);
+}
+
+export function focusInlineSearch() {
+    if (!dom.inlineSearchInput) {
+        showSearchOverlayLegacy();
+        return;
+    }
+    closeMobileSidebar();
+    dom.inlineSearchInput.focus();
+    dom.inlineSearchInput.select();
+}
+
+export function showSearchOverlayLegacy() {
     if (!searchOverlay) initSearchOverlay();
     searchPreviousFocus = document.activeElement;
     searchOverlay.classList.add('visible');
@@ -151,6 +179,10 @@ export function showSearchOverlay() {
     closeMobileSidebar();
 }
 
+export function showSearchOverlay() {
+    focusInlineSearch();
+}
+
 export function closeSearchOverlay() {
     if (searchOverlay) searchOverlay.classList.remove('visible');
     clearCustomHighlights();
@@ -159,6 +191,132 @@ export function closeSearchOverlay() {
     if (searchPreviousFocus) {
         searchPreviousFocus.focus();
         searchPreviousFocus = null;
+    }
+}
+
+export function clearInlineSearch(restoreKeyword = true) {
+    if (dom.inlineSearchInput) {
+        dom.inlineSearchInput.value = '';
+    }
+    updateInlineSearchClearBtn();
+
+    const wasInline = state.inlineSearchActive;
+    state.inlineSearchActive = false;
+    state.inlineSearchQuery = '';
+
+    if (restoreKeyword && _savedKeyword) {
+        state.activeKeyword = _savedKeyword;
+        state.allKeywordMode = _savedKeywordMode;
+        _savedKeyword = '';
+        _savedKeywordMode = false;
+        if (state.activeKeyword) {
+            if (state.currentDocType === 'pdf') {
+                fn.performSearch(state.activeKeyword);
+            } else {
+                fn.performDocSearch(state.activeKeyword);
+            }
+        }
+        return;
+    }
+
+    _savedKeyword = '';
+    _savedKeywordMode = false;
+
+    if (wasInline) {
+        clearSearch();
+    }
+}
+
+function performInlineSearch(query) {
+    const trimmed = query.trim();
+
+    if (!trimmed) {
+        clearInlineSearch(true);
+        return;
+    }
+
+    if (!state.currentDocUrl) {
+        return;
+    }
+
+    if (!state.inlineSearchActive) {
+        _savedKeyword = state.activeKeyword || '';
+        _savedKeywordMode = state.allKeywordMode;
+    }
+
+    state.inlineSearchActive = true;
+    state.inlineSearchQuery = trimmed;
+    state.activeKeyword = '';
+    state.allKeywordMode = false;
+
+    if (state.currentDocUrl && state.docContentCache[state.currentDocUrl]) {
+        fn.performDocSearch(trimmed);
+        updateToolbarState();
+        return;
+    }
+
+    if (!state.pdfDoc) {
+        return;
+    }
+
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const localRegex = new RegExp(escaped, 'gi');
+    const results = [];
+
+    for (let pageNum = 1; pageNum <= state.totalPages; pageNum++) {
+        const cached = state.textPageCache[pageNum];
+        if (!cached) continue;
+        const pageText = cached.text;
+        let match;
+        while ((match = localRegex.exec(pageText)) !== null) {
+            results.push({ page: pageNum, startIndex: match.index, endIndex: match.index + match[0].length, text: match[0] });
+        }
+        localRegex.lastIndex = 0;
+    }
+
+    const mappedResults = [];
+    for (const r of results) {
+        const cached = state.textPageCache[r.page];
+        if (!cached || !cached.items) continue;
+        const coords = getTextCoords(cached, r.startIndex, r.endIndex);
+        if (!coords) continue;
+        mappedResults.push({
+            page: r.page,
+            x: coords.startX,
+            y: coords.startY,
+            width: coords.endX - coords.startX,
+            height: coords.height
+        });
+    }
+
+    state.searchResults = mappedResults;
+    state.searchResultsByPage = {};
+    mappedResults.forEach((r, i) => {
+        if (!state.searchResultsByPage[r.page]) state.searchResultsByPage[r.page] = [];
+        state.searchResultsByPage[r.page].push({ result: r, globalIndex: i });
+    });
+    state.currentMatchIndex = 0;
+
+    dom.navGroup.classList.add('active');
+    dom.keywordSelect.innerHTML = '';
+    const option = document.createElement('option');
+    option.value = '__inline__';
+    option.textContent = `"${trimmed}" (${mappedResults.length})`;
+    option.selected = true;
+    option.disabled = true;
+    dom.keywordSelect.appendChild(option);
+
+    dom.matchTotal.textContent = mappedResults.length;
+    dom.navSep.style.display = mappedResults.length > 0 ? 'inline' : 'none';
+
+    state.emit('badge-changed');
+    updateToolbarState();
+
+    if (mappedResults.length > 0) {
+        goToMatch(0);
+    } else {
+        fn.clearHighlights();
+        dom.matchInput.value = '';
     }
 }
 
@@ -522,11 +680,13 @@ export function updateToolbarState() {
 
     const hasResults = (state.currentDocType === 'pdf' ? state.searchResults.length : state.docSearchResults.length) > 0;
 
-    dom.searchToggleBtn.disabled = !hasDoc;
+    if (dom.searchToggleBtn) dom.searchToggleBtn.disabled = !hasDoc;
+    if (dom.inlineSearchInput) dom.inlineSearchInput.disabled = !hasDoc;
+    if (dom.inlineSearchClear) dom.inlineSearchClear.disabled = !hasDoc;
     dom.keywordSelect.disabled = !hasDoc || dom.keywordSelect.options.length === 0;
     dom.findPrevBtn.disabled = !hasResults;
     dom.findNextBtn.disabled = !hasResults;
-    dom.clearSearchBtn.disabled = !hasResults && !state.activeKeyword;
+    dom.clearSearchBtn.disabled = !hasResults && !state.activeKeyword && !state.inlineSearchActive;
     dom.matchInput.disabled = !hasResults;
 
     dom.calibrateScaleBtn.disabled = !hasDoc;
@@ -714,7 +874,7 @@ export function setupEventListeners() {
             e.preventDefault();
             if (searchOverlay && searchOverlay.classList.contains('visible')) customFindPrev();
         }
-        if (e.key === 'g' && !e.ctrlKey && !/^(INPUT|TEXTAREA|SELECT)$/i.test(document.activeElement.tagName) && document.activeElement.getAttribute('contenteditable') !== 'true') {
+        if (e.key === 'g' && !e.ctrlKey && !/^(INPUT|TEXTAREA|SELECT)$/i.test(document.activeElement.tagName) && document.activeElement.getAttribute('contenteditable') !== 'true' && !document.activeElement.closest?.('.custom-dropdown')) {
             e.preventDefault();
             dom.pageInput.focus();
             dom.pageInput.select();
@@ -771,12 +931,55 @@ export function setupEventListeners() {
     });
 
     dom.keywordSelect.addEventListener('change', async () => {
-        if (dom.keywordSelect.value) {
+        if (dom.keywordSelect.value && dom.keywordSelect.value !== '__inline__') {
+            clearInlineSearch(false);
             if (state.currentDocType === 'pdf') await fn.performSearch(dom.keywordSelect.value);
             else await fn.performDocSearch(dom.keywordSelect.value);
             updateToolbarState();
         }
     });
+
+    if (dom.inlineSearchInput) {
+        let inlineSearchTimer = null;
+
+        dom.inlineSearchInput.addEventListener('input', () => {
+            updateInlineSearchClearBtn();
+            if (inlineSearchTimer) clearTimeout(inlineSearchTimer);
+            inlineSearchTimer = setTimeout(() => {
+                performInlineSearch(dom.inlineSearchInput.value);
+            }, 150);
+        });
+
+        dom.inlineSearchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (inlineSearchTimer) {
+                    clearTimeout(inlineSearchTimer);
+                    inlineSearchTimer = null;
+                    performInlineSearch(dom.inlineSearchInput.value);
+                }
+                if (e.shiftKey) {
+                    findPrev();
+                } else {
+                    findNext();
+                }
+            } else if (e.key === 'Escape') {
+                if (!dom.inlineSearchInput.value) {
+                    clearInlineSearch(true);
+                }
+                dom.inlineSearchInput.blur();
+            }
+        });
+    }
+
+    if (dom.inlineSearchClear) {
+        dom.inlineSearchClear.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            clearInlineSearch(true);
+            if (dom.inlineSearchInput) dom.inlineSearchInput.focus();
+        });
+    }
 
     dom.viewerScroll.addEventListener('scroll', () => {
         if (!dom.viewer.children.length) return;
@@ -880,6 +1083,7 @@ export function setupEventListeners() {
 
     dom.viewerScroll.addEventListener('click', (e) => {
         measure.onPageClick(e);
+        updateMeasureUI();
     });
 
     dom.viewerScroll.addEventListener('dblclick', (e) => {

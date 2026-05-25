@@ -243,6 +243,13 @@ input, select, button, textarea {
     border-color: var(--accent);
     background: var(--grey-600);
 }
+.global-search-icon {
+    color: var(--grey-500);
+    font-size: 0.85rem;
+    padding: 0 0 0 8px;
+    user-select: none;
+    pointer-events: none;
+}
 .global-search-input {
     flex: 1;
     background: none;
@@ -259,7 +266,8 @@ input, select, button, textarea {
     opacity: 0.8;
 }
 .global-search-input:placeholder-shown {
-    text-align: center;
+    text-align: left;
+    padding-left: 4px;
 }
 .global-search-input:not(:placeholder-shown) {
     text-align: left;
@@ -697,6 +705,25 @@ input, select, button, textarea {
     transform: none;
 }
 
+#prevPageBtn, #nextPageBtn {
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+#zoomFitBtn, #zoomActualBtn {
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+#measureDistBtn, #measurePerimBtn, #measureAreaBtn {
+    min-width: 34px;
+    padding: 5px 12px;
+}
+
+#clearMeasureBtn {
+    padding: 5px 6px;
+}
+
 .viewer-toolbar .zoom-level {
     font-size: 0.88rem;
     min-width: 44px;
@@ -705,13 +732,6 @@ input, select, button, textarea {
     font-weight: 500;
     font-variant-numeric: tabular-nums;
 }
-
-.viewer-toolbar .nav-group {
-    display: none;
-    align-items: center;
-    gap: 2px;
-}
-.viewer-toolbar .nav-group.active { display: flex; }
 
 .viewer-toolbar .dim {
     font-size: 0.8rem;
@@ -734,7 +754,7 @@ input, select, button, textarea {
 }
 
 .toolbar-measure .scale-input {
-    width: 76px;
+    width: 64px;
     background: var(--overlay);
     border: 1px solid var(--overlay-border);
     color: var(--text-overlay);
@@ -820,6 +840,94 @@ input, select, button, textarea {
 .kw-manage-btn:hover {
     color: var(--accent-light);
     background: var(--accent-bg);
+}
+
+.search-input-wrapper {
+    display: flex;
+    align-items: center;
+    position: relative;
+    gap: 2px;
+    background: var(--overlay);
+    border: 1px solid var(--overlay-border);
+    border-radius: 5px;
+    padding: 1px 3px 1px 8px;
+    max-height: 26px;
+    box-sizing: border-box;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.search-input-wrapper:focus-within {
+    border-color: var(--accent);
+    background: var(--overlay-active);
+    box-shadow: 0 0 0 1px var(--accent);
+}
+
+.search-icon {
+    color: var(--grey-500);
+    font-size: 0.85rem;
+    user-select: none;
+    pointer-events: none;
+}
+
+.inline-search-input {
+    background: transparent;
+    border: none;
+    color: var(--text-overlay);
+    padding: 3px 4px;
+    font-size: 0.85rem;
+    outline: none;
+    min-width: 60px;
+    width: 90px;
+}
+
+.inline-search-input::placeholder {
+    color: var(--grey-500);
+    opacity: 0.8;
+}
+
+.inline-search-input:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.inline-search-clear {
+    background: none;
+    border: none;
+    color: var(--grey-500);
+    padding: 2px 6px;
+    margin: 1px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: color 0.15s, background 0.15s, opacity 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.inline-search-clear.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.inline-search-clear:hover {
+    color: var(--accent);
+    background: var(--accent-bg);
+}
+
+.inline-search-clear:disabled {
+    opacity: 0.35;
+    cursor: default;
+    pointer-events: none;
+}
+
+.viewer-toolbar .toolbar-keyword {
+    overflow: visible;
+}
+.viewer-toolbar .toolbar-keyword > .toolbar-row {
+    overflow: visible;
 }
 
 /* ── PDF Viewer ── */
@@ -1474,4 +1582,169 @@ body::before {
     .folder, .file { font-size: 0.78rem; padding: 2px 4px; }
     .tree-count { font-size: 0.6rem; padding: 1px 4px; }
     .tree-child { font-size: 0.72rem; padding: 2px 6px 2px 8px; }
+}
+
+/* ── Custom Dropdown ── */
+
+.custom-dropdown {
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.custom-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    width: 100%;
+    background: var(--overlay);
+    border: 1px solid var(--overlay-border);
+    color: var(--text-overlay);
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+}
+.custom-dropdown-trigger:hover {
+    background: var(--overlay-active);
+    border-color: var(--overlay-hover);
+}
+.custom-dropdown.open .custom-dropdown-trigger {
+    border-color: var(--accent);
+    background: var(--overlay-active);
+}
+.custom-dropdown-trigger:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.custom-dropdown-arrow {
+    flex-shrink: 0;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid var(--grey-400);
+    margin-top: 1px;
+    transition: transform 0.2s;
+}
+.custom-dropdown.open .custom-dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.custom-dropdown-menu {
+    display: none;
+    position: absolute;
+    z-index: 200;
+    min-width: 100%;
+    width: auto;
+    max-height: 240px;
+    overflow-y: auto;
+    background: var(--grey-800);
+    border: 1px solid var(--grey-600);
+    border-radius: 5px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    margin-top: 2px;
+    padding: 4px 0;
+}
+.custom-dropdown-menu.open {
+    display: block;
+}
+.custom-dropdown-menu.flip-up {
+    margin-top: 0;
+    margin-bottom: 2px;
+}
+
+.custom-dropdown-item {
+    padding: 6px 10px;
+    font-size: 0.83rem;
+    color: var(--grey-200);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.12s;
+    user-select: none;
+}
+.custom-dropdown-item:hover,
+.custom-dropdown-item:focus-visible {
+    background: var(--accent-bg);
+    outline: none;
+}
+.custom-dropdown-item.selected {
+    background: var(--accent);
+    color: white;
+    font-weight: 500;
+}
+.custom-dropdown-item.selected:hover,
+.custom-dropdown-item.selected:focus-visible {
+    background: var(--accent-light);
+}
+.custom-dropdown-item.disabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+}
+
+.custom-dropdown.disabled .custom-dropdown-trigger {
+    opacity: 0.35;
+    cursor: default;
+    pointer-events: none;
+}
+
+[data-theme="dark"] .custom-dropdown-menu {
+    background: #262626;
+    border-color: #404040;
+}
+[data-theme="dark"] .custom-dropdown-item {
+    color: #d4d4d4;
+}
+[data-theme="dark"] .custom-dropdown-item.selected {
+    background: var(--accent);
+    color: white;
+}
+
+/* ── Sidebar keyword row ── */
+
+.keyword-row .custom-dropdown {
+    flex: 1;
+    min-width: 0;
+}
+
+/* ── Keyword menu row ── */
+
+.keyword-menu-row .custom-dropdown {
+    flex: 1;
+    min-width: 0;
+}
+.keyword-menu-row .custom-dropdown-trigger {
+    font-size: 0.75rem;
+    padding: 5px 6px;
+}
+
+/* ── Toolbar keyword select ── */
+
+.custom-dropdown[data-for="keywordSelect"] .custom-dropdown-trigger {
+    max-width: 132px;
+    min-width: 88px;
+}
+
+/* ── Mobile ── */
+
+@media (max-width: 600px) {
+    .custom-dropdown-item {
+        padding: 8px 12px;
+        font-size: 0.85rem;
+    }
+    .custom-dropdown-menu {
+        max-height: 200px;
+    }
 }

@@ -52,6 +52,8 @@ export let zoomActualBtn;
 export let prevPageBtn;
 export let nextPageBtn;
 export let searchToggleBtn;
+export let inlineSearchInput;
+export let inlineSearchClear;
 export let findPrevBtn;
 export let findNextBtn;
 export let clearSearchBtn;
@@ -120,6 +122,8 @@ export function init() {
     prevPageBtn = document.getElementById('prevPageBtn');
     nextPageBtn = document.getElementById('nextPageBtn');
     searchToggleBtn = document.getElementById('searchToggleBtn');
+    inlineSearchInput = document.getElementById('inlineSearchInput');
+    inlineSearchClear = document.getElementById('inlineSearchClear');
     findPrevBtn = document.getElementById('findPrevBtn');
     findNextBtn = document.getElementById('findNextBtn');
     clearSearchBtn = document.getElementById('clearSearchBtn');

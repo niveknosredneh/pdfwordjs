@@ -24,6 +24,7 @@ import * as ui from './ui.js';
 import * as keywords from './keywords.js';
 import * as ocr from './ocr.js';
 import * as measure from './measure.js';
+import { CustomDropdown } from './dropdown.js';
 
 
 register('setupVirtualPages', pdfRenderer.setupVirtualPages);
@@ -132,6 +133,11 @@ keywords.initKeywordBridge();
 
 document.addEventListener('DOMContentLoaded', async () => {
     dom.init();
+
+    new CustomDropdown(dom.keywordListSelect);
+    new CustomDropdown(dom.keywordSelect);
+    new CustomDropdown(dom.kwListSelector);
+
     keywords.setupKeywordManager();
     fileHandler.initFileHandler();
     dom.keywordListSelect.addEventListener('change', () => {

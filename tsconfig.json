@@ -1,0 +1,20 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "strict": true,
+        "noImplicitAny": false,
+        "strictNullChecks": false,
+        "useUnknownInCatchVariables": false,
+        "allowJs": true,
+        "checkJs": false,
+        "outDir": "dist-types",
+        "declaration": false,
+        "declarationMap": false,
+        "sourceMap": true,
+        "skipLibCheck": true
+    },
+    "include": ["src/**/*.ts", "src/**/*.js"],
+    "exclude": ["node_modules", "dist"]
+}

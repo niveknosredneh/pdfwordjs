@@ -4,27 +4,27 @@ import * as pdfjsLib from 'pdfjs-dist';
 
 const scriptUrl = document.currentScript && document.currentScript.src;
 const basePath = scriptUrl ? scriptUrl.substring(0, scriptUrl.lastIndexOf('/') + 1) : './';
-pdfjsLib.GlobalWorkerOptions.workerSrc = basePath + 'pdf.worker.min.js';
+pdfjsLib.GlobalWorkerOptions.workerSrc = basePath + 'pdf.worker.min.mjs';
 
 setPdfjsLib(pdfjsLib);
 setJSZip(JSZip);
 setMammoth(mammoth);
 
-import { state } from './state.js';
-import * as dom from './dom.js';
-import { register, fn, setPdfjsLib, setJSZip, setMammoth } from './cross.js';
+import { state } from './state';
+import * as dom from './dom';
+import { register, fn, setPdfjsLib, setJSZip, setMammoth } from './cross';
 
-import * as pdfRenderer from './pdf-renderer.js';
-import * as pdfSearch from './pdf-search.js';
-import * as docxEngine from './docx-engine.js';
-import * as pdfLoader from './pdf-loader.js';
-import * as fileHandler from './file-handler.js';
-import * as rendering from './rendering.js';
-import * as ui from './ui.js';
-import * as keywords from './keywords.js';
-import * as ocr from './ocr.js';
-import * as measure from './measure.js';
-import { CustomDropdown } from './dropdown.js';
+import * as pdfRenderer from './pdf-renderer';
+import * as pdfSearch from './pdf-search';
+import * as docxEngine from './docx-engine';
+import * as pdfLoader from './pdf-loader';
+import * as fileHandler from './file-handler';
+import * as rendering from './rendering';
+import * as ui from './ui';
+import * as keywords from './keywords';
+import * as ocr from './ocr';
+import * as measure from './measure';
+import { CustomDropdown } from './dropdown';
 
 
 register('setupVirtualPages', pdfRenderer.setupVirtualPages);

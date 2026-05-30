@@ -1,6 +1,8 @@
-const _listeners = {};
+import type { State } from './types';
 
-export const state = {
+const _listeners: Record<string, Array<(data?: any) => void>> = {};
+
+export const state: State = {
     pdfDoc: null,
     currentDocUrl: '',
     currentDocType: 'pdf',
@@ -20,7 +22,7 @@ export const state = {
     docOriginalHtml: null,
 
     pageHeights: {},
-    renderedPages: new Set(),
+    renderedPages: new Set<number>(),
     renderedScales: {},
     textPageCache: {},
     renderTasks: new Map(),
@@ -45,6 +47,9 @@ export const state = {
     mobileSidebarOpen: false,
     settingsOpen: false,
     settingsJustToggled: false,
+    inlineSearchActive: false,
+    inlineSearchQuery: '',
+    _settingsPreviousFocus: null,
     touchStartDist: 0,
     touchStartScale: 1.0,
 
@@ -70,12 +75,12 @@ export const state = {
     MAX_KEYWORD_LENGTH: 200,
     MAX_TOTAL_FILES: 1000,
 
-    on(event, cb) {
+    on(event: string, cb: (data?: any) => void): () => void {
         (_listeners[event] ||= []).push(cb);
         return () => this.off(event, cb);
     },
 
-    off(event, cb) {
+    off(event: string, cb: (data?: any) => void): void {
         const arr = _listeners[event];
         if (arr) {
             const i = arr.indexOf(cb);
@@ -83,7 +88,7 @@ export const state = {
         }
     },
 
-    emit(event, data) {
+    emit(event: string, data?: any): void {
         const arr = _listeners[event];
         if (arr) arr.slice().forEach(cb => cb(data));
     },

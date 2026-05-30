@@ -1,13 +1,20 @@
-import { state } from './state.js';
-import * as dom from './dom.js';
-import { fn } from './cross.js';
-import { processTextContent } from './pdf-search.js';
+import { state } from './state';
+import * as dom from './dom';
+import { fn } from './cross';
+import { processTextContentAsync } from './pdf-search';
+
+function scheduleIdle(fn, timeout = 300) {
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(fn, { timeout });
+    } else {
+        setTimeout(fn, 0);
+    }
+}
 
 state.pageHeights = {};
 state.renderedPages = new Set();
 state.renderedScales = {};
 
-const LOW_RES_SCALE = 0.2;
 
 function getCanvasContext(canvas) {
     try {
@@ -20,6 +27,29 @@ function getCanvasContext(canvas) {
 let renderGen = 0;
 let _rendering = false;
 let _needsRefresh = false;
+let _observerTimer = null;
+let _scrollTimer = null;
+let _isScrolling = false;
+const MAX_CONCURRENT_RENDERS = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, 6));
+
+function promiseMapConcurrent(items, fn, concurrency) {
+    const results = [];
+    const executing = new Set();
+    let i = 0;
+    return new Promise((resolve) => {
+        function enqueue() {
+            while (executing.size < concurrency && i < items.length) {
+                const idx = i++;
+                const p = Promise.resolve().then(() => fn(items[idx])).then(r => results.push(r));
+                executing.add(p);
+                const clean = () => { executing.delete(p); enqueue(); };
+                p.then(clean, clean);
+            }
+            if (executing.size === 0) resolve(results);
+        }
+        enqueue();
+    });
+}
 
 // ── initialization ──
 
@@ -48,9 +78,9 @@ export async function setupVirtualPages() {
             const placeholder = document.createElement('div');
             placeholder.className = 'page-placeholder';
             placeholder.id = 'page-' + pageNum;
-            placeholder.dataset.pageNum = pageNum;
-            placeholder.style.setProperty('--base-w', 600);
-            placeholder.style.setProperty('--base-h', 800);
+            placeholder.dataset.pageNum = String(pageNum);
+            placeholder.style.setProperty('--base-w', '600');
+            placeholder.style.setProperty('--base-h', '800');
             dom.viewer.appendChild(placeholder);
             continue;
         }
@@ -60,7 +90,7 @@ export async function setupVirtualPages() {
         const placeholder = document.createElement('div');
         placeholder.className = 'page-placeholder';
         placeholder.id = 'page-' + pageNum;
-        placeholder.dataset.pageNum = pageNum;
+        placeholder.dataset.pageNum = String(pageNum);
         placeholder.style.setProperty('--base-w', viewport.width);
         placeholder.style.setProperty('--base-h', viewport.height);
         dom.viewer.appendChild(placeholder);
@@ -74,9 +104,23 @@ export async function setupVirtualPages() {
 function setupPageObserver() {
     if (state.pageObserver) state.pageObserver.disconnect();
 
+    dom.viewerScroll.addEventListener('scroll', () => {
+        _isScrolling = true;
+        clearTimeout(_scrollTimer);
+        _scrollTimer = setTimeout(() => {
+            _isScrolling = false;
+            if (_needsRefresh && !_rendering) refreshVisiblePages();
+        }, 200);
+    }, { passive: true });
+
     state.pageObserver = new IntersectionObserver(() => {
         if (_rendering) { _needsRefresh = true; return; }
-        refreshVisiblePages();
+        if (_isScrolling) {
+            _needsRefresh = true;
+            return;
+        }
+        clearTimeout(_observerTimer);
+        _observerTimer = setTimeout(() => refreshVisiblePages(), 50);
     }, { root: dom.viewerScroll, rootMargin: '1200px' });
 
     document.querySelectorAll('[id^="page-"]').forEach(el => state.pageObserver.observe(el));
@@ -160,22 +204,13 @@ async function refreshVisiblePages() {
     await new Promise(r => setTimeout(r, 0));
     if (gen !== renderGen) return;
 
-    // Pass 1: low-res all visible pages concurrently (fast)
-    const lowResBatch = visible
-        .filter(p => (state.renderedScales[p.pn] || 0) < LOW_RES_SCALE)
-        .map(p => renderPageNow(p.pn, LOW_RES_SCALE).catch(() => {}));
-    if (lowResBatch.length) {
-        await Promise.all(lowResBatch);
-        if (gen !== renderGen) return;
+    // Full-res visible pages with limited concurrency, center-first
+    const toRender = visible.filter(p => (state.renderedScales[p.pn] || 0) < state.currentScale);
+    if (toRender.length) {
+        await promiseMapConcurrent(toRender, p => renderPageNow(p.pn).catch(() => {}), Math.min(2, MAX_CONCURRENT_RENDERS));
     }
 
-    // Pass 2: full-res visible pages one at a time, center first
-    for (const p of visible) {
-        if (gen !== renderGen) break;
-        if ((state.renderedScales[p.pn] || 0) >= state.currentScale) continue;
-        await renderPageNow(p.pn).catch(() => {});
-        await new Promise(r => setTimeout(r, 0));
-    }
+    scheduleIdle(() => prerenderNearPages(), 300);
 } finally {
     _rendering = false;
     if (_needsRefresh) {
@@ -187,7 +222,7 @@ async function refreshVisiblePages() {
 
 // ── render a single page ──
 
-export async function renderPageNow(pageNum, forceScale = null) {
+export async function renderPageNow(pageNum: number, forceScale: number = null) {
     const renderScale = forceScale || state.currentScale;
     const dprCaps = { quality: 99, medium: 1.5, fast: 1.0 };
     const dpr = Math.min(window.devicePixelRatio || 1, dprCaps[state.renderQuality] || 99);
@@ -229,7 +264,7 @@ export async function renderPageNow(pageNum, forceScale = null) {
         canvas.height = viewport.height;
         canvas.style.width = displayWidth + 'px';
         canvas.style.height = displayHeight + 'px';
-        canvas.dataset.scale = renderScale;
+        canvas.dataset.scale = String(renderScale);
 
         const renderTask = page.render({ canvasContext: ctx, viewport: viewport });
         state.renderTasks.set(pageNum, renderTask);
@@ -249,37 +284,43 @@ export async function renderPageNow(pageNum, forceScale = null) {
 
         if (state.textPageCache[pageNum]) {
             requestAnimationFrame(() => buildTextLayer(el, pageNum, renderScale, displayHeight));
-            if (!forceScale && state.searchResults.length > 0) fn.renderHighlightsForPage(pageNum);
+            if (!forceScale && state.searchResults.length > 0) scheduleIdle(() => fn.renderHighlightsForPage(pageNum));
         }
 
         // Fire-and-forget text content fetch for text layer & highlights.
         // On resolve, rebuild text layer & highlights if page is still displayed.
         if (!state.textPageCache[pageNum]) {
-            page.getTextContent().then(textContent => {
-                const { text, items } = processTextContent(textContent);
+            page.getTextContent().then(async textContent => {
+                const processed = await processTextContentAsync(textContent);
                 state.textPageCache[pageNum] = {
-                    text,
-                    viewport: { width: vp1.width, height: vp1.height, offsetX: vp1.offsetX, offsetY: vp1.offsetY },
-                    items
+                    text: processed.text,
+                    viewport: { width: vp1.width, height: vp1.height, offsetX: 0, offsetY: vp1.offsetY },
+                    items: processed.items
                 };
                 state.pageHeights[pageNum] = vp1.height;
 
                 const pe = document.getElementById('page-' + pageNum);
                 if (pe && pe.isConnected && pe.querySelector('canvas')) {
-                    const cv = pe.querySelector('canvas');
-                    const s = parseFloat(cv.dataset.scale) || state.currentScale;
-                    const dh = parseFloat(cv.style.height) || (state.pageHeights[pageNum] * s);
-                    requestAnimationFrame(() => buildTextLayer(pe, pageNum, s, dh));
-                    if (state.searchResults.length > 0) fn.renderHighlightsForPage(pageNum);
+                    const rect = pe.getBoundingClientRect();
+                    const viewH = dom.viewerScroll.clientHeight;
+                    if (rect.bottom > -500 && rect.top < viewH + 500) {
+                        const cv = pe.querySelector('canvas');
+                        const s = parseFloat(cv.dataset.scale) || state.currentScale;
+                        const dh = parseFloat(cv.style.height) || (state.pageHeights[pageNum] * s);
+                        requestAnimationFrame(() => buildTextLayer(pe, pageNum, s, dh));
+                        if (state.searchResults.length > 0) {
+                            scheduleIdle(() => fn.renderHighlightsForPage(pageNum));
+                        }
+                    }
                 }
             }).catch(() => {});
         }
     } catch (err) {
-        if (err.name !== 'RenderingCancelledException') {
-            console.warn('Render error:', err.message);
+        if ((err as Error).name !== 'RenderingCancelledException') {
+            console.warn('Render error:', (err as Error).message);
             const pe = document.getElementById('page-' + pageNum);
             if (pe) {
-                pe.innerHTML = '<div class="page-error" style="padding:20px;text-align:center;color:var(--grey-500)">Render error: ' + err.message + '</div>';
+                pe.innerHTML = '<div class="page-error" style="padding:20px;text-align:center;color:var(--grey-500)">Render error: ' + (err as Error).message + '</div>';
             }
         }
     } finally {
@@ -298,24 +339,51 @@ function buildTextLayer(el, pageNum, renderScale, displayHeight) {
     if (!textContent || !textContent.items) return;
 
     const offsetY = (textContent.viewport && textContent.viewport.offsetY) || 0;
-
-    const fragment = document.createDocumentFragment();
-    for (const item of textContent.items) {
-        const span = document.createElement('span');
-        span.textContent = item.text;
-        const t = item.transform;
-        const x = t[4] * renderScale;
-        const y = t[5] * renderScale;
-        const fontSize = Math.sqrt(t[0] * t[0] + t[1] * t[1]) * renderScale;
-        const itemH = (item.height || fontSize) * renderScale;
-        const top = (displayHeight + offsetY * renderScale) - y - itemH;
-        span.style.cssText = 'position:absolute;left:' + x + 'px;top:' + top + 'px;font-size:' + fontSize + 'px;white-space:pre;color:transparent';
-        fragment.appendChild(span);
-    }
+    const items = textContent.items;
     const textLayer = document.createElement('div');
     textLayer.className = 'textLayer';
-    textLayer.appendChild(fragment);
     el.appendChild(textLayer);
+
+    const CHUNK = 200;
+    let idx = 0;
+
+    function processChunk() {
+        if (!el.isConnected) return;
+        const fragment = document.createDocumentFragment();
+        const end = Math.min(idx + CHUNK, items.length);
+        for (; idx < end; idx++) {
+            const item = items[idx];
+            const span = document.createElement('span');
+            span.textContent = item.text;
+            const t = item.transform;
+            const x = t[4] * renderScale;
+            const y = t[5] * renderScale;
+            const fontSize = Math.sqrt(t[0] * t[0] + t[1] * t[1]) * renderScale;
+            const itemH = (item.height || fontSize) * renderScale;
+            const top = (displayHeight + offsetY * renderScale) - y - itemH;
+            span.style.cssText = 'position:absolute;left:' + x + 'px;top:' + top + 'px;font-size:' + fontSize + 'px;white-space:pre;color:transparent';
+            fragment.appendChild(span);
+        }
+        textLayer.appendChild(fragment);
+        if (idx < items.length) {
+            scheduleIdle(processChunk);
+        }
+    }
+
+    processChunk();
+}
+
+function prerenderNearPages() {
+    const ranges = getViewportRange();
+    const pages: number[] = [];
+    for (const pn of ranges.near) {
+        const pageNum = pn as number;
+        if ((state.renderedScales[pageNum] || 0) >= state.currentScale) continue;
+        if (state.renderTasks.has(pageNum)) continue;
+        pages.push(pageNum);
+    }
+    if (pages.length === 0) return;
+    promiseMapConcurrent(pages, pn => renderPageNow(pn).catch(() => {}), 1);
 }
 
 // ── public helpers ──
@@ -328,7 +396,7 @@ export function setRenderQuality(q) {
     state.renderQuality = q;
     localStorage.setItem('pdf_render_quality', q);
     const ranges = getViewportRange();
-    for (const pn of ranges.visible) state.renderedScales[pn] = 0;
+    for (const pn of ranges.visible) state.renderedScales[pn as number] = 0;
     refreshVisiblePages();
 }
 
@@ -342,7 +410,7 @@ export function setZoom(newScale, force = false) {
     if (state.currentDocType !== 'pdf') {
         state.currentScale = clampedScale;
         fn.updateZoomDisplay();
-        document.documentElement.style.setProperty('--docx-scale', clampedScale);
+        document.documentElement.style.setProperty('--docx-scale', String(clampedScale));
         return;
     }
 
@@ -353,11 +421,11 @@ export function setZoom(newScale, force = false) {
     let anchorOffset = 0;
 
     for (const el of document.querySelectorAll('[id^="page-"]')) {
-        const pageTop = el.offsetTop;
-        const pageBottom = pageTop + el.offsetHeight;
+        const pageTop = (el as HTMLElement).offsetTop;
+        const pageBottom = pageTop + (el as HTMLElement).offsetHeight;
         if (viewportCenter >= pageTop && viewportCenter < pageBottom) {
             anchorEl = el;
-            anchorOffset = Math.max(0, Math.min(1, (viewportCenter - pageTop) / el.offsetHeight));
+            anchorOffset = Math.max(0, Math.min(1, (viewportCenter - pageTop) / (el as HTMLElement).offsetHeight));
             break;
         }
     }
@@ -365,11 +433,11 @@ export function setZoom(newScale, force = false) {
     if (!anchorEl) {
         let minDist = Infinity;
         for (const el of document.querySelectorAll('[id^="page-"]')) {
-            const dist = Math.abs(el.offsetTop + el.offsetHeight / 2 - viewportCenter);
+            const dist = Math.abs((el as HTMLElement).offsetTop + (el as HTMLElement).offsetHeight / 2 - viewportCenter);
             if (dist < minDist) {
                 minDist = dist;
                 anchorEl = el;
-                anchorOffset = viewportCenter < el.offsetTop ? 0 : 1;
+                anchorOffset = viewportCenter < (el as HTMLElement).offsetTop ? 0 : 1;
             }
         }
     }
@@ -377,7 +445,7 @@ export function setZoom(newScale, force = false) {
     const oldScale = state.currentScale;
     state.currentScale = clampedScale;
     fn.updateZoomDisplay();
-    document.documentElement.style.setProperty('--pdf-scale', clampedScale);
+    document.documentElement.style.setProperty('--pdf-scale', String(clampedScale));
 
     const scaleRatio = clampedScale / oldScale;
 
@@ -406,12 +474,12 @@ export function setZoom(newScale, force = false) {
 
         const ranges = getViewportRange();
         for (const pn of ranges.visible) {
-            state.renderedScales[pn] = 0;
+            state.renderedScales[pn as number] = 0;
         }
 
         if (anchorEl) {
-            const newTop = anchorEl.offsetTop;
-            const newH = anchorEl.offsetHeight;
+            const newTop = (anchorEl as HTMLElement).offsetTop;
+            const newH = (anchorEl as HTMLElement).offsetHeight;
             dom.viewerScroll.scrollTop = Math.max(0, newTop + anchorOffset * newH - dom.viewerScroll.clientHeight / 2);
             dom.viewerScroll.scrollLeft = oldScrollLeft;
         }
@@ -433,7 +501,7 @@ export function rebuildTextLayers() {
         const displayHeight = parseFloat(canvas.style.height) || (state.pageHeights[pageNum] * s);
 
         requestAnimationFrame(() => buildTextLayer(el, pageNum, s, displayHeight));
-        if (state.searchResults.length > 0) fn.renderHighlightsForPage(pageNum);
+        if (state.searchResults.length > 0) scheduleIdle(() => fn.renderHighlightsForPage(pageNum));
     }
 }
 
@@ -444,9 +512,10 @@ export function startPrerender() {
     if (_rendering) return;
 
     const pagesWithMatches = [...new Set(state.searchResults.map(r => r.page))];
+    const toRender = pagesWithMatches.filter(pn => (state.renderedScales[pn] || 0) < state.currentScale);
+    if (toRender.length === 0) return;
 
-    for (const pageNum of pagesWithMatches) {
-        if ((state.renderedScales[pageNum] || 0) >= state.currentScale) continue;
-        renderPageNow(pageNum).catch(() => {});
-    }
+    scheduleIdle(() => {
+        promiseMapConcurrent(toRender, pn => renderPageNow(pn).catch(() => {}), Math.min(2, MAX_CONCURRENT_RENDERS));
+    }, 100);
 }

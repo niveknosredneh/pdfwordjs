@@ -1,5 +1,12 @@
 export class CustomDropdown {
-    constructor(selectEl) {
+    private select: HTMLSelectElement;
+    private wrapper!: HTMLDivElement;
+    private trigger!: HTMLButtonElement;
+    private menu!: HTMLDivElement;
+    private _observer: MutationObserver;
+    private _onDocumentClick!: (e: MouseEvent) => void;
+
+    constructor(selectEl: HTMLSelectElement) {
         this.select = selectEl;
         this._build();
         this._bindEvents();
@@ -13,7 +20,7 @@ export class CustomDropdown {
         this.sync();
     }
 
-    _build() {
+    _build(): void {
         this.wrapper = document.createElement('div');
         this.wrapper.className = 'custom-dropdown';
         if (this.select.id) this.wrapper.dataset.for = this.select.id;
@@ -28,21 +35,21 @@ export class CustomDropdown {
         this.menu.setAttribute('role', 'listbox');
 
         this.select.style.display = 'none';
-        this.select.parentNode.insertBefore(this.wrapper, this.select);
+        this.select.parentNode!.insertBefore(this.wrapper, this.select);
         this.wrapper.appendChild(this.trigger);
         this.wrapper.appendChild(this.menu);
         this.wrapper.appendChild(this.select);
     }
 
-    _bindEvents() {
-        this.trigger.addEventListener('click', (e) => {
+    _bindEvents(): void {
+        this.trigger.addEventListener('click', (e: MouseEvent) => {
             e.stopPropagation();
             if (this.select.disabled) return;
             this.toggle();
         });
 
-        this.menu.addEventListener('click', (e) => {
-            const item = e.target.closest('.custom-dropdown-item');
+        this.menu.addEventListener('click', (e: MouseEvent) => {
+            const item = (e.target as HTMLElement).closest('.custom-dropdown-item') as HTMLElement | null;
             if (!item) return;
             const value = item.dataset.value;
             if (value !== undefined) {
@@ -54,35 +61,33 @@ export class CustomDropdown {
         this._onKeyDown = this._onKeyDown.bind(this);
         this.menu.addEventListener('keydown', this._onKeyDown);
 
-        this._onDocumentClick = (e) => {
-            if (!this.wrapper.contains(e.target)) {
+        this._onDocumentClick = (e: MouseEvent) => {
+            if (!this.wrapper.contains(e.target as Node)) {
                 this.close();
             }
         };
     }
 
-    _onKeyDown(e) {
-        const items = [...this.menu.querySelectorAll('.custom-dropdown-item')];
-        const currentIndex = items.indexOf(document.activeElement);
+    _onKeyDown(e: KeyboardEvent): void {
+        const items = [...this.menu.querySelectorAll<HTMLElement>('.custom-dropdown-item')];
+        const currentIndex = items.indexOf(document.activeElement as HTMLElement);
 
         switch (e.key) {
             case 'ArrowDown':
                 e.preventDefault();
-                const next = currentIndex + 1;
-                if (next < items.length) items[next].focus();
+                if (currentIndex + 1 < items.length) items[currentIndex + 1].focus();
                 else items[0]?.focus();
                 break;
             case 'ArrowUp':
                 e.preventDefault();
-                const prev = currentIndex - 1;
-                if (prev >= 0) items[prev].focus();
+                if (currentIndex - 1 >= 0) items[currentIndex - 1].focus();
                 else items[items.length - 1]?.focus();
                 break;
             case 'Enter':
             case ' ':
                 e.preventDefault();
                 if (document.activeElement?.classList.contains('custom-dropdown-item')) {
-                    this._selectValue(document.activeElement.dataset.value);
+                    this._selectValue((document.activeElement as HTMLElement).dataset.value!);
                     this.close();
                 }
                 break;
@@ -106,26 +111,26 @@ export class CustomDropdown {
         }
     }
 
-    _selectValue(value) {
+    _selectValue(value: string): void {
         this.select.value = value;
         this.select.dispatchEvent(new Event('change', { bubbles: true }));
         this._updateTriggerText();
     }
 
-    _updateTriggerText() {
+    _updateTriggerText(): void {
         const selectedOpt = this.select.options[this.select.selectedIndex];
         this.trigger.textContent = selectedOpt ? selectedOpt.textContent : '';
         this._appendArrow();
     }
 
-    _appendArrow() {
+    _appendArrow(): void {
         const arrow = document.createElement('span');
         arrow.className = 'custom-dropdown-arrow';
         arrow.setAttribute('aria-hidden', 'true');
         this.trigger.appendChild(arrow);
     }
 
-    _updateDisabled() {
+    _updateDisabled(): void {
         if (this.select.disabled) {
             this.wrapper.classList.add('disabled');
             this.trigger.tabIndex = -1;
@@ -135,7 +140,7 @@ export class CustomDropdown {
         }
     }
 
-    sync() {
+    sync(): void {
         this.menu.innerHTML = '';
         const options = [...this.select.options];
         if (options.length === 0) {
@@ -167,7 +172,7 @@ export class CustomDropdown {
         this._updateDisabled();
     }
 
-    open() {
+    open(): void {
         if (this.select.disabled || this.select.options.length === 0) return;
         if (this.menu.classList.contains('open')) return;
 
@@ -194,13 +199,13 @@ export class CustomDropdown {
             this.menu.style.bottom = 'auto';
         }
 
-        const firstItem = this.menu.querySelector('.custom-dropdown-item');
+        const firstItem = this.menu.querySelector<HTMLElement>('.custom-dropdown-item');
         if (firstItem) firstItem.focus();
 
         document.addEventListener('click', this._onDocumentClick);
     }
 
-    close() {
+    close(): void {
         if (!this.menu.classList.contains('open')) return;
         this.menu.classList.remove('open');
         this.wrapper.classList.remove('open');
@@ -213,7 +218,7 @@ export class CustomDropdown {
         document.removeEventListener('click', this._onDocumentClick);
     }
 
-    toggle() {
+    toggle(): void {
         if (this.menu.classList.contains('open')) {
             this.close();
         } else {
@@ -221,7 +226,7 @@ export class CustomDropdown {
         }
     }
 
-    destroy() {
+    destroy(): void {
         this._observer.disconnect();
         document.removeEventListener('click', this._onDocumentClick);
         this.select.style.display = '';

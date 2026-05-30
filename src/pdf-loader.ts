@@ -1,9 +1,9 @@
-import { state } from './state.js';
-import * as dom from './dom.js';
-import { fn, pdfjsLib } from './cross.js';
-import { evictCaches } from './file-handler.js';
-import { setScale, autoDetectScale } from './measure.js';
-import { processTextContent } from './pdf-search.js';
+import { state } from './state';
+import * as dom from './dom';
+import { fn, pdfjsLib } from './cross';
+import { evictCaches } from './file-handler';
+import { setScale, autoDetectScale } from './measure';
+import { processTextContent, processTextContentAsync } from './pdf-search';
 
 function getDocTypeFromUrl(url) {
     const dataCached = state.docDataCache[url];
@@ -71,7 +71,6 @@ function loadPDF(fileUrl, keyword = '') {
             let cached = state.docTextCache[fileUrl];
             if (!cached) {
                 dom.loaderFilename.textContent = 'Extracting text from loaded PDF...';
-                const pageTextData = [];
                 const extractPromises = [];
                 for (let p = 1; p <= state.totalPages; p++) {
                     extractPromises.push(
@@ -85,15 +84,17 @@ function loadPDF(fileUrl, keyword = '') {
                     );
                 }
                 const allResults = await Promise.all(extractPromises);
-                for (const { pageNum, content, viewport } of allResults) {
-                    if (!content) continue;
-                    const { text, items } = processTextContent(content);
-                    pageTextData.push({
-                        text,
-                        viewport: { width: viewport.width, height: viewport.height, offsetX: viewport.offsetX, offsetY: viewport.offsetY },
-                        items
+                const textPromises = allResults
+                    .filter(({ content }) => content)
+                    .map(async ({ content, viewport }) => {
+                        const { text, items } = await processTextContentAsync(content);
+                        return {
+                            text,
+                            viewport: { width: viewport.width, height: viewport.height, offsetX: viewport.offsetX, offsetY: viewport.offsetY },
+                            items
+                        };
                     });
-                }
+                const pageTextData = await Promise.all(textPromises);
                 dom.loaderProgressFill.style.width = '80%';
                 const fileName = state.docDataCache[fileUrl]?.name || 'Document';
                 cached = {
@@ -133,7 +134,7 @@ function loadPDF(fileUrl, keyword = '') {
             if (detected) {
                 setScale(detected);
                 const scaleInput = document.getElementById('scaleInput');
-                if (scaleInput) scaleInput.value = '1:' + detected;
+                if (scaleInput) (scaleInput as HTMLInputElement).value = '1:' + detected;
                 fn.refreshAllMeasurements();
             }
 
@@ -141,8 +142,8 @@ function loadPDF(fileUrl, keyword = '') {
             dom.loader.style.display = 'none';
             fn.updatePageInfo();
             fn.updateZoomDisplay();
-            dom.pageInput.max = state.totalPages;
-            dom.pageTotal.textContent = state.totalPages;
+            dom.pageInput.max = String(state.totalPages);
+            dom.pageTotal.textContent = String(state.totalPages);
 
             state.emit('heatmaps-changed');
             fn.refreshAllMeasurements();

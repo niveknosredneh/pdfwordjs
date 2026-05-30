@@ -65,6 +65,39 @@ function processRegexOnPDFCache(pages, keywords) {
     return { counts, totalMatches };
 }
 
+function processTextContentOnItems(items) {
+    let pageText = '';
+    const processed = [];
+    let prevItem = null;
+    for (const item of items) {
+        if (prevItem) {
+            const fontSize = Math.abs(item.transform[0]) || 12;
+            const gapX = item.transform[4] - (prevItem.transform[4] + prevItem.width);
+            const gapY = Math.abs(item.transform[5] - prevItem.transform[5]);
+            const sameLine = gapY <= fontSize * 0.5;
+            if (sameLine) {
+                if (gapX > 0) {
+                    pageText += ' ';
+                    processed.push({ text: ' ', transform: item.transform, width: 0, height: item.height });
+                }
+            } else {
+                const hyphenBreak = /-\s*$/.test(prevItem.str) && /^\w/.test(item.str);
+                if (hyphenBreak) {
+                    pageText = pageText.slice(0, -1);
+                    if (processed.length > 0) processed[processed.length - 1].text = processed[processed.length - 1].text.slice(0, -1);
+                } else {
+                    pageText += ' ';
+                    processed.push({ text: ' ', transform: item.transform, width: 0, height: item.height });
+                }
+            }
+        }
+        pageText += item.str;
+        processed.push({ text: item.str, transform: item.transform, width: item.width, height: item.height });
+        prevItem = item;
+    }
+    return { text: pageText, items: processed };
+}
+
 // Main message handler
 self.onmessage = function(e) {
     const { task, data } = e.data;
@@ -95,6 +128,13 @@ self.onmessage = function(e) {
                     counts: result.counts,
                     totalMatches: result.totalMatches
                 });
+            }
+            break;
+
+        case 'process-text-content':
+            {
+                const result = processTextContentOnItems(data.items);
+                self.postMessage({ type: 'text-content-result', result });
             }
             break;
 

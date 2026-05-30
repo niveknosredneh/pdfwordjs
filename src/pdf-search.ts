@@ -1,7 +1,7 @@
-import { state } from './state.js';
-import * as dom from './dom.js';
-import { getKeywordRegex, normalizeKeywordMatch } from './keyword-regex.js';
-import { fn, KEYWORDS } from './cross.js';
+import { state } from './state';
+import * as dom from './dom';
+import { getKeywordRegex, normalizeKeywordMatch } from './keyword-regex';
+import { fn, KEYWORDS } from './cross';
 
 state.searchResults = [];
 state.currentMatchIndex = -1;
@@ -41,7 +41,7 @@ export function processTextContent(textContent) {
     return { text: pageText, items };
 }
 
-function buildOffsetMap(textItems) {
+export function buildOffsetMap(textItems) {
     const offsets = [];
     let acc = 0;
     for (const item of textItems) {
@@ -51,7 +51,7 @@ function buildOffsetMap(textItems) {
     return { offsets, length: acc };
 }
 
-function findStartItem(pos, offsets, items) {
+export function findStartItem(pos, offsets, items) {
     let lo = 0, hi = offsets.length - 1;
     while (lo < hi) {
         const mid = (lo + hi + 1) >>> 1;
@@ -61,7 +61,7 @@ function findStartItem(pos, offsets, items) {
     return { item: items[lo], charStart: offsets[lo], index: lo };
 }
 
-function findEndItem(endPos, startIdx, offsets, items) {
+export function findEndItem(endPos, startIdx, offsets, items) {
     let lo = startIdx, hi = offsets.length - 1;
     while (lo < hi) {
         const mid = (lo + hi) >>> 1;
@@ -72,7 +72,7 @@ function findEndItem(endPos, startIdx, offsets, items) {
     return { item: items[lo], charStart: offsets[lo] };
 }
 
-function computeMatchCoords(matchStart, matchEnd, viewport, textItems, offsetMap) {
+export function computeMatchCoords(matchStart, matchEnd, viewport, textItems, offsetMap) {
     const start = findStartItem(matchStart, offsetMap.offsets, textItems);
     const end = findEndItem(matchEnd, start.index, offsetMap.offsets, textItems);
 
@@ -119,7 +119,7 @@ export async function precomputeAllSearches() {
         }
     }
 
-    state.searchCache._deduplicated = true;
+    (state.searchCache as any)._deduplicated = true;
     state.emit('keywords-changed');
 }
 
@@ -156,6 +156,18 @@ async function computeSearchForQuery(query) {
     state.searchCache[query] = results;
 }
 
+export async function processTextContentAsync(textContent) {
+    const pool = state.workerPool;
+    if (pool && pool.initialized) {
+        try {
+            return await pool.runProcessTextContent(textContent.items);
+        } catch (e) {
+            // fall back to sync processing
+        }
+    }
+    return processTextContent(textContent);
+}
+
 export async function fetchPageItems(pageNum) {
     if (!state.pdfDoc) return null;
     const cached = state.textPageCache[pageNum];
@@ -168,7 +180,7 @@ export async function fetchPageItems(pageNum) {
         cached.items = items;
         return items;
     } catch (err) {
-        console.warn('Failed to fetch page items for page ' + pageNum + ':', err.message);
+        console.warn('Failed to fetch page items for page ' + pageNum + ':', (err as Error).message);
         return null;
     }
 }
@@ -223,9 +235,9 @@ export function cycleAllKeywords() {
 
     dom.navGroup.classList.add('active');
     dom.navSep.style.display = '';
-    dom.matchTotal.textContent = allResults.length;
-    dom.matchInput.max = allResults.length;
-    dom.matchInput.value = state.currentMatchIndex + 1;
+    dom.matchTotal.textContent = String(allResults.length);
+    dom.matchInput.max = String(allResults.length);
+    dom.matchInput.value = String(state.currentMatchIndex + 1);
     if (!wasAlreadyAll) renderAllHighlights();
     state.emit('keywords-changed');
     state.emit('badge-changed');
@@ -272,9 +284,9 @@ function showSearchResults() {
     if (state.searchResults.length > 0) {
         dom.navGroup.classList.add('active');
         dom.navSep.style.display = '';
-        dom.matchTotal.textContent = state.searchResults.length;
-        dom.matchInput.max = state.searchResults.length;
-        dom.matchInput.value = 1;
+        dom.matchTotal.textContent = String(state.searchResults.length);
+        dom.matchInput.max = String(state.searchResults.length);
+        dom.matchInput.value = '1';
         state.currentMatchIndex = 0;
         renderAllHighlights();
         state.emit('keywords-changed');
@@ -308,9 +320,9 @@ export function cycleSearch(query) {
             dom.navGroup.classList.add('active');
             dom.navSep.style.display = '';
             state.currentMatchIndex = (state.currentMatchIndex + 1) % state.searchResults.length;
-            dom.matchTotal.textContent = state.searchResults.length;
-            dom.matchInput.max = state.searchResults.length;
-            dom.matchInput.value = state.currentMatchIndex + 1;
+            dom.matchTotal.textContent = String(state.searchResults.length);
+            dom.matchInput.max = String(state.searchResults.length);
+            dom.matchInput.value = String(state.currentMatchIndex + 1);
             state.emit('keywords-changed');
             state.emit('heatmaps-changed');
             fn.goToMatch(state.currentMatchIndex);
@@ -338,7 +350,7 @@ export function renderAllHighlights() {
             if (result.x === null) return;
             const mark = document.createElement('div');
             mark.className = 'highlight-mark' + (globalIndex === state.currentMatchIndex ? ' current' : '');
-            mark.dataset.idx = globalIndex;
+            mark.dataset.idx = String(globalIndex);
             mark.style.left = (result.x * state.currentScale) + 'px';
             mark.style.top = (result.y * state.currentScale) + 'px';
             mark.style.width = (result.width * state.currentScale) + 'px';
@@ -359,14 +371,15 @@ export function updateCurrentMatch(oldIndex, newIndex) {
 
 export function repositionHighlights() {
     for (const mark of document.querySelectorAll('.highlight-mark')) {
-        const idx = parseInt(mark.dataset.idx);
+        const el = mark as HTMLElement;
+        const idx = parseInt(el.dataset.idx);
         if (isNaN(idx)) continue;
         const result = state.searchResults[idx];
         if (!result || result.x === null) continue;
-        mark.style.left = (result.x * state.currentScale) + 'px';
-        mark.style.top = (result.y * state.currentScale) + 'px';
-        mark.style.width = (result.width * state.currentScale) + 'px';
-        mark.style.height = (result.height * state.currentScale) + 'px';
+        el.style.left = (result.x * state.currentScale) + 'px';
+        el.style.top = (result.y * state.currentScale) + 'px';
+        el.style.width = (result.width * state.currentScale) + 'px';
+        el.style.height = (result.height * state.currentScale) + 'px';
     }
 }
 
@@ -383,7 +396,7 @@ export function renderHighlightsForPage(pageNum) {
         if (result.x === null) return;
         const mark = document.createElement('div');
         mark.className = 'highlight-mark' + (globalIndex === state.currentMatchIndex ? ' current' : '');
-        mark.dataset.idx = globalIndex;
+        mark.dataset.idx = String(globalIndex);
         mark.style.left = (result.x * state.currentScale) + 'px';
         mark.style.top = (result.y * state.currentScale) + 'px';
         mark.style.width = (result.width * state.currentScale) + 'px';

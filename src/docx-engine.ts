@@ -1,7 +1,7 @@
-import { state } from './state.js';
-import * as dom from './dom.js';
-import { getKeywordRegex, normalizeKeywordMatch } from './keyword-regex.js';
-import { fn, KEYWORDS } from './cross.js';
+import { state } from './state';
+import * as dom from './dom';
+import { getKeywordRegex, normalizeKeywordMatch } from './keyword-regex';
+import { fn, KEYWORDS } from './cross';
 
 state.searchCache = {};
 state.docSearchResults = [];
@@ -141,8 +141,8 @@ export function loadDocxDoc(fileUrl, keyword = '') {
 
             fn.updatePageInfo();
             fn.updateZoomDisplay();
-            dom.pageInput.max = state.totalPages;
-            dom.pageTotal.textContent = state.totalPages;
+            dom.pageInput.max = String(state.totalPages);
+            dom.pageTotal.textContent = String(state.totalPages);
 
             startDocSearchComputation();
 
@@ -150,7 +150,7 @@ export function loadDocxDoc(fileUrl, keyword = '') {
                 const counts = state.searchCache._docCounts;
                 if (counts) {
                     for (const [k, v] of Object.entries(counts)) {
-                        if (v > 0) { keyword = k; break; }
+                        if ((v as unknown as number) > 0) { keyword = k; break; }
                     }
                 }
             }
@@ -223,8 +223,8 @@ function startDocSearchComputation() {
         counts[r.keyword] = (counts[r.keyword] || 0) + 1;
     });
 
-    state.searchCache._docCounts = counts;
-    state.searchCache._docResults = results;
+    (state.searchCache as any)._docCounts = counts;
+    (state.searchCache as any)._docResults = results;
     state.emit('keywords-changed');
 }
 
@@ -246,9 +246,9 @@ export function cycleAllDocKeywords() {
 
     dom.navGroup.classList.add('active');
     dom.navSep.style.display = '';
-    dom.matchTotal.textContent = allResults.length;
-    dom.matchInput.max = allResults.length;
-    dom.matchInput.value = state.docCurrentMatchIndex + 1;
+    dom.matchTotal.textContent = String(allResults.length);
+    (dom.matchInput as HTMLInputElement).max = String(allResults.length);
+    (dom.matchInput as HTMLInputElement).value = String(state.docCurrentMatchIndex + 1);
     renderDocHighlights();
     state.emit('badge-changed');
     goToDocMatch(state.docCurrentMatchIndex);
@@ -276,15 +276,15 @@ export function performDocSearch(query) {
     if (results.length > 0) {
         dom.navGroup.classList.add('active');
         dom.navSep.style.display = '';
-        dom.matchTotal.textContent = results.length;
-        dom.matchInput.max = results.length;
-        dom.matchInput.value = 1;
+        dom.matchTotal.textContent = String(results.length);
+        (dom.matchInput as HTMLInputElement).max = String(results.length);
+        (dom.matchInput as HTMLInputElement).value = '1';
         renderDocHighlights();
         state.emit('badge-changed');
         goToDocMatch(0);
     } else {
         dom.navGroup.classList.remove('active');
-        dom.navSep.style.display = '';
+        dom.navSep.style.display = 'none';
         dom.matchTotal.textContent = '0';
         dom.matchInput.value = '';
     }
@@ -316,9 +316,9 @@ export function cycleDocSearch(query) {
 
     dom.navGroup.classList.add('active');
     dom.navSep.style.display = '';
-    dom.matchTotal.textContent = results.length;
-    dom.matchInput.max = results.length;
-    dom.matchInput.value = state.docCurrentMatchIndex + 1;
+    dom.matchTotal.textContent = String(results.length);
+    (dom.matchInput as HTMLInputElement).max = String(results.length);
+    (dom.matchInput as HTMLInputElement).value = String(state.docCurrentMatchIndex + 1);
     renderDocHighlights();
     state.emit('badge-changed');
     goToDocMatch(state.docCurrentMatchIndex);
@@ -363,11 +363,11 @@ export function renderDocHighlights() {
 
         // Build a single regex matching any of the result texts (word-bounded, matching search)
         const uniqueTerms = [...new Set(pageResults.map(r => r.text))];
-        const combinedPattern = uniqueTerms.map(t => '\\b' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').join('|');
+        const combinedPattern = uniqueTerms.map(t => '\\b' + (t as string).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').join('|');
         const combinedRegex = new RegExp(combinedPattern, 'gi');
 
         // Walk text nodes
-        const walker = document.createTreeWalker(pageEl, NodeFilter.SHOW_TEXT, null, null);
+        const walker = document.createTreeWalker(pageEl, NodeFilter.SHOW_TEXT, null as any);
         const nodes = [];
         let node;
         while (node = walker.nextNode()) nodes.push(node);
@@ -401,7 +401,7 @@ export function goToDocMatch(index) {
     if (!state.docSearchResults.length) return;
 
     state.docCurrentMatchIndex = ((index % state.docSearchResults.length) + state.docSearchResults.length) % state.docSearchResults.length;
-    dom.matchInput.value = state.docCurrentMatchIndex + 1;
+    (dom.matchInput as HTMLInputElement).value = String(state.docCurrentMatchIndex + 1);
     state.emit('badge-changed');
 
     const result = state.docSearchResults[state.docCurrentMatchIndex];

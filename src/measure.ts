@@ -1,5 +1,5 @@
-import { state } from './state.js';
-import * as dom from './dom.js';
+import { state } from './state';
+import * as dom from './dom';
 
 // ── state ──
 
@@ -14,7 +14,7 @@ let pendingPoints = [];
 /** @type {{x1:number, y1:number, x2:number, y2:number}|null} */
 let previewLine = null;
 /** @type {number|null} */
-let activePageNumNum = null;
+let activePageNum = null;
 /** @type {boolean} */
 let isMouseListening = false;
 
@@ -77,23 +77,23 @@ loadScale();
 const POINTS_PER_MM = 72 / 25.4;
 
 /** @param {number} pdfPts */
-function pdfToMm(pdfPts) {
+export function pdfToMm(pdfPts) {
     return pdfPts / POINTS_PER_MM;
 }
 
 /** @param {number} pdfPts */
-function realWorldMm(pdfPts) {
+export function realWorldMm(pdfPts) {
     return pdfToMm(pdfPts) * scaleRatio;
 }
 
-function addCommas(n) {
+export function addCommas(n) {
     const parts = n.split('.');
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     return parts.join('.');
 }
 
 /** @param {number} totalMm */
-function formatLength(totalMm) {
+export function formatLength(totalMm) {
     if (totalMm < 0) totalMm = 0;
     if (totalMm < 10) return Math.round(totalMm) + ' mm';
     if (totalMm < 1000) return (totalMm / 10).toFixed(1) + ' cm';
@@ -101,7 +101,7 @@ function formatLength(totalMm) {
 }
 
 /** @param {number} mm2 */
-function formatArea(mm2) {
+export function formatArea(mm2) {
     if (mm2 < 0) mm2 = 0;
     if (mm2 < 100) return Math.round(mm2) + ' mm\xB2';
     if (mm2 < 10000) return (mm2 / 100).toFixed(1) + ' cm\xB2';
@@ -109,7 +109,7 @@ function formatArea(mm2) {
 }
 
 /** @param {Array<{x:number, y:number}>} points */
-function simplePolygonArea(points) {
+export function simplePolygonArea(points) {
     let sum = 0;
     for (let i = 0; i < points.length; i++) {
         const j = (i + 1) % points.length;
@@ -120,7 +120,7 @@ function simplePolygonArea(points) {
 }
 
 /** @param {{x:number, y:number, page?:number}} p1 @param {{x:number, y:number, page?:number}} p2 @param {{x:number, y:number, page?:number}} p3 @param {{x:number, y:number, page?:number}} p4 */
-function getIntersection(p1, p2, p3, p4) {
+export function getIntersection(p1, p2, p3, p4) {
     const denom = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
     if (Math.abs(denom) < Number.EPSILON) return null;
 
@@ -138,7 +138,7 @@ function getIntersection(p1, p2, p3, p4) {
 }
 
 /** @param {Array<{page?:number, x:number, y:number}>} points */
-function decomposePolygon(points) {
+export function decomposePolygon(points) {
     if (points.length < 3) return [];
 
     for (let i = 0; i < points.length; i++) {
@@ -173,14 +173,14 @@ function decomposePolygon(points) {
 }
 
 /** @param {{x:number, y:number}} p1 @param {{x:number, y:number}} p2 */
-function distanceBetween(p1, p2) {
+export function distanceBetween(p1, p2) {
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
     return Math.sqrt(dx * dx + dy * dy);
 }
 
 /** @param {{x:number, y:number}} p1 @param {{x:number, y:number}} p2 @param {boolean} snap */
-function snapAngle45(p1, p2, snap) {
+export function snapAngle45(p1, p2, snap) {
     if (!snap) return p2;
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
@@ -192,7 +192,7 @@ function snapAngle45(p1, p2, snap) {
 }
 
 /** @param {Array<{x:number, y:number}>} points @param {boolean} [closed] */
-function polylineLength(points, closed) {
+export function polylineLength(points, closed) {
     let total = 0;
     const n = closed ? points.length : points.length - 1;
     for (let i = 0; i < n; i++) {
@@ -283,6 +283,7 @@ export function clearAllMeasurements() {
     if (!url) return;
     delete measurementsByDoc[url];
     saveMeasurements();
+    markCommittedDirty();
     renderAllMeasurements();
 }
 
@@ -301,7 +302,7 @@ export function startCalibration() {
         isMouseListening = true;
     }
     dom.viewerScroll.classList.add('is-measuring');
-    const scaleInput = document.getElementById('scaleInput');
+    const scaleInput = document.getElementById('scaleInput') as HTMLInputElement;
     if (scaleInput) {
         scaleInput.value = '';
         scaleInput.placeholder = 'm';
@@ -322,7 +323,7 @@ export function cancelCalibration() {
         isMouseListening = false;
     }
     dom.viewerScroll.classList.remove('is-measuring');
-    const scaleInput = document.getElementById('scaleInput');
+    const scaleInput = document.getElementById('scaleInput') as HTMLInputElement;
     if (scaleInput) {
         scaleInput.placeholder = '1:XXX';
         scaleInput.title = 'Scale 1:X';
@@ -339,6 +340,7 @@ export function deleteMeasurement(id) {
     if (!url || !measurementsByDoc[url]) return;
     measurementsByDoc[url] = measurementsByDoc[url].filter(m => m.id !== id);
     saveMeasurements();
+    markCommittedDirty();
     renderAllMeasurements();
 }
 
@@ -405,7 +407,7 @@ function generateId() {
 function handleCalibrationClick(e) {
     if (!isCalibrating) return;
 
-    const scaleInput = document.getElementById('scaleInput');
+    const scaleInput = document.getElementById('scaleInput') as HTMLInputElement;
     const meters = parseFloat(scaleInput?.value);
     if (isNaN(meters) || meters <= 0) {
         if (scaleInput) { scaleInput.focus(); scaleInput.select(); }
@@ -481,6 +483,7 @@ function finalizeDistance() {
     previewLine = null;
     activePageNum = null;
     saveMeasurements();
+    markCommittedDirty();
     renderAllMeasurements();
     deactivateTool();
 }
@@ -523,6 +526,7 @@ function finalizePerimeter() {
     previewLine = null;
     activePageNum = null;
     saveMeasurements();
+    markCommittedDirty();
     renderAllMeasurements();
 }
 
@@ -565,6 +569,7 @@ function finalizeArea() {
     previewLine = null;
     activePageNum = null;
     saveMeasurements();
+    markCommittedDirty();
     renderAllMeasurements();
 }
 
@@ -596,8 +601,7 @@ function onMouseMove(e) {
             x2: snapped.x,
             y2: snapped.y
         };
-        clearPreview();
-        renderPreview();
+        schedulePreview();
         return;
     }
     if (!activeTool || pendingPoints.length === 0) return;
@@ -618,11 +622,26 @@ function onMouseMove(e) {
         x2: snapped.x,
         y2: snapped.y
     };
-    clearPreview();
-    renderPreview();
+    schedulePreview();
+}
+
+function schedulePreview() {
+    if (_previewRAF) return;
+    _previewRAF = requestAnimationFrame(() => {
+        _previewRAF = null;
+        clearPreview();
+        renderPreview();
+    });
 }
 
 // ── rendering ──
+
+let _committedDirty = true;
+let _measureRenderRAF = null;
+
+function markCommittedDirty() {
+    _committedDirty = true;
+}
 
 function clearMeasurementOverlays() {
     document.querySelectorAll('.measure-layer').forEach(el => el.remove());
@@ -633,13 +652,16 @@ function clearPreview() {
 }
 
 function renderBase() {
-    clearMeasurementOverlays();
+    if (_committedDirty) {
+        clearMeasurementOverlays();
 
-    const url = getDocKey();
-    const docs = measurementsByDoc[url] || [];
+        const url = getDocKey();
+        const docs = measurementsByDoc[url] || [];
 
-    for (const m of docs) {
-        renderMeasurement(m);
+        for (const m of docs) {
+            renderMeasurement(m);
+        }
+        _committedDirty = false;
     }
 
     if (isCalibrating && calibrationPoint && activePageNum) {
@@ -655,6 +677,8 @@ function renderBase() {
     }
 }
 
+let _previewRAF = null;
+
 function renderPreview() {
     if (previewLine && activePageNum) {
         if (isCalibrating) {
@@ -666,8 +690,13 @@ function renderPreview() {
 }
 
 export function renderAllMeasurements() {
-    renderBase();
-    renderPreview();
+    if (_measureRenderRAF) return;
+    _measureRenderRAF = requestAnimationFrame(() => {
+        _measureRenderRAF = null;
+        clearPreview();
+        renderBase();
+        renderPreview();
+    });
 }
 
 /** @param {number} pageNum */
@@ -696,26 +725,25 @@ function createLabel(x, y, color, text, measId) {
     lbl.style.top = (y - 10) + 'px';
     lbl.style.color = '#000';
     lbl.style.borderColor = color;
-    if (measId) {
-        const shortText = text.split(' @ ')[0];
-        lbl.innerHTML = shortText.replace(/\n/g, '<br>') + '  \u00D7';
-        lbl.title = text + '\nClick to delete';
-        lbl.style.cursor = 'pointer';
-        lbl.addEventListener('click', (e) => {
-            e.stopPropagation();
-            deleteMeasurement(measId);
-        });
-        lbl.addEventListener('mouseenter', () => {
-            document.querySelectorAll('[data-meas-id="' + measId + '"]').forEach(el => el.classList.add('measure-highlight'));
-        });
-        lbl.addEventListener('mouseleave', () => {
-            document.querySelectorAll('[data-meas-id="' + measId + '"]').forEach(el => el.classList.remove('measure-highlight'));
-        });
-    } else if (measId) {
-        lbl.textContent = text;
-    } else {
-        lbl.textContent = text;
-    }
+        if (measId) {
+            const shortText = text.split(' @ ')[0];
+            lbl.innerHTML = shortText.replace(/\n/g, '<br>') + '  \u00D7';
+            lbl.title = text + '\nClick to delete';
+            lbl.style.cursor = 'pointer';
+            lbl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteMeasurement(measId);
+            });
+            const escapedMeasId = CSS.escape(measId);
+            lbl.addEventListener('mouseenter', () => {
+                document.querySelectorAll('[data-meas-id="' + escapedMeasId + '"]').forEach(el => el.classList.add('measure-highlight'));
+            });
+            lbl.addEventListener('mouseleave', () => {
+                document.querySelectorAll('[data-meas-id="' + escapedMeasId + '"]').forEach(el => el.classList.remove('measure-highlight'));
+            });
+        } else {
+            lbl.textContent = text;
+        }
     return lbl;
 }
 
@@ -794,7 +822,7 @@ function renderPendingPoint() {
     const layer = getOrCreateLayer(pageEl);
     const tx = p.x * s;
     const ty = p.y * s;
-    const tick = createTick(tx, ty, 10, 2, 0, 'rgba(80, 255, 150, 0.75)', 'measure-tick-pending');
+    const tick = createTick(tx, ty, 10, 2, 0, 'rgba(80, 255, 150, 0.75)', 'measure-tick-pending', null);
     tick.style.boxShadow = '0 0 0 1px rgba(255,255,255,0.6)';
     layer.appendChild(tick);
 }
@@ -862,7 +890,7 @@ function renderPendingPerimeter() {
     const color = 'rgba(80, 255, 150, 0.75)';
 
     for (let i = 0; i < points.length - 1; i++) {
-        drawLineSegment(layer, points[i], points[i + 1], s, color);
+        drawLineSegment(layer, points[i], points[i + 1], s, color, null);
     }
 
     // Ticks only at first and last point
@@ -882,7 +910,7 @@ function renderPendingPerimeter() {
         }
         const tx = p.x * s;
         const ty = p.y * s;
-        const tick = createTick(tx, ty, tickLen, tickW, deg, color, 'measure-tick-pending');
+        const tick = createTick(tx, ty, tickLen, tickW, deg, color, 'measure-tick-pending', null);
         layer.appendChild(tick);
     }
 
@@ -890,10 +918,10 @@ function renderPendingPerimeter() {
     if (points.length >= 2) {
         const ARR = 0;
         const a0Rad = Math.atan2(points[1].y - points[0].y, points[1].x - points[0].x);
-        addArrow(layer, points[0].x * s + ARR * Math.cos(a0Rad), points[0].y * s + ARR * Math.sin(a0Rad), a0Rad * 180 / Math.PI + 180, color);
+        addArrow(layer, points[0].x * s + ARR * Math.cos(a0Rad), points[0].y * s + ARR * Math.sin(a0Rad), a0Rad * 180 / Math.PI + 180, color, null);
         const n = points.length - 1;
         const aNRad = Math.atan2(points[n].y - points[n - 1].y, points[n].x - points[n - 1].x);
-        addArrow(layer, points[n].x * s - ARR * Math.cos(aNRad), points[n].y * s - ARR * Math.sin(aNRad), aNRad * 180 / Math.PI, color);
+        addArrow(layer, points[n].x * s - ARR * Math.cos(aNRad), points[n].y * s - ARR * Math.sin(aNRad), aNRad * 180 / Math.PI, color, null);
     }
 
     // running length label for perimeter/area
@@ -902,7 +930,7 @@ function renderPendingPerimeter() {
         const realMm = realWorldMm(totalPdf);
         const lblText = formatLength(realMm);
         const last = points[points.length - 1];
-        const lbl = createLabel(last.x * s + 10, last.y * s - 10, color, lblText);
+        const lbl = createLabel(last.x * s + 10, last.y * s - 10, color, lblText, null);
         layer.appendChild(lbl);
     }
 }
@@ -967,7 +995,7 @@ function renderCalibrationPendingPoint() {
     const layer = getOrCreateLayer(pageEl);
     const tx = p.x * s;
     const ty = p.y * s;
-    const tick = createTick(tx, ty, 10, 2, 0, 'rgba(80, 255, 150, 0.75)', 'measure-tick-pending');
+    const tick = createTick(tx, ty, 10, 2, 0, 'rgba(80, 255, 150, 0.75)', 'measure-tick-pending', null);
     tick.style.boxShadow = '0 0 0 1px rgba(255,255,255,0.6)';
     layer.appendChild(tick);
 }
@@ -1113,12 +1141,13 @@ export function refreshAllMeasurements() {
 }
 
 export function handleZoomChange() {
+    markCommittedDirty();
     renderAllMeasurements();
 }
 
 // ── auto scale detection ──
 
-function parseScaleString(str) {
+export function parseScaleString(str) {
     // "1 mm = 50 mm" → 50
     let m = str.match(/(\d+(?:\.\d+)?)\s*(?:mm|cm|m|in|ft|"|')\s*=\s*(\d+(?:\.\d+)?)\s*(?:mm|cm|m|in|ft|"|')/i);
     if (m) {

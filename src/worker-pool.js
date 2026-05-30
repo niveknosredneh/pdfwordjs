@@ -12,7 +12,7 @@ export class WorkerPool {
     init() {
         if (this.initialized) return;
         for (let i = 0; i < this.poolSize; i++) {
-            const worker = new Worker('src/doc_processor_worker.js');
+            const worker = new Worker(WORKER_BASE + 'doc_processor_worker.js');
             worker.onmessage = (e) => this._handleWorkerMessage(worker, e);
             worker.onerror = (err) => this._handleWorkerError(worker, err);
             this.workers.push(worker);
@@ -105,6 +105,22 @@ export class WorkerPool {
             };
 
             this.taskQueue.push({ taskData, resolve, reject, onProgress: null });
+            this._processQueue();
+        });
+    }
+
+    runProcessTextContent(items) {
+        return new Promise((resolve, reject) => {
+            const taskData = {
+                task: 'process-text-content',
+                data: { items }
+            };
+            this.taskQueue.push({
+                taskData,
+                resolve: (data) => resolve(data.result),
+                reject,
+                onProgress: null
+            });
             this._processQueue();
         });
     }

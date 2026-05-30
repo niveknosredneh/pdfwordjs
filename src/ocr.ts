@@ -1,7 +1,7 @@
-import { state } from './state.js';
-import * as dom from './dom.js';
-import { fn, pdfjsLib, KEYWORDS } from './cross.js';
-import { getKeywordRegex, normalizeKeywordMatch } from './keyword-regex.js';
+import { state } from './state';
+import * as dom from './dom';
+import { fn, pdfjsLib, KEYWORDS } from './cross';
+import { getKeywordRegex, normalizeKeywordMatch } from './keyword-regex';
 
 let ocrEnabled = true;
 const ocrFileState = new Map();
@@ -37,7 +37,7 @@ export function initOcr() {
 
 export function toggleOcrGlobal() {
     ocrEnabled = !ocrEnabled;
-    localStorage.setItem('pdf_ocr_enabled', ocrEnabled);
+    localStorage.setItem('pdf_ocr_enabled', String(ocrEnabled));
     state.emit('results-changed');
     return ocrEnabled;
 }
@@ -87,7 +87,7 @@ function handleWorkerMessage(e) {
 }
 
 function createSlotWorker(slot) {
-    const w = new Worker('src/ocr_worker.js?h=__BUNDLE_HASH__');
+    const w = new Worker(WORKER_BASE + 'ocr_worker.js?h=' + __BUNDLE_HASH__);
     w.onmessage = handleWorkerMessage;
     w.onerror = () => {
         for (const [key, cb] of workerCallbacks) {
@@ -104,7 +104,7 @@ function createSlotWorker(slot) {
 function initWorkerPool() {
     if (workerSlots.length > 0) return;
     for (let i = 0; i < WORKER_POOL_SIZE; i++) {
-        const slot = {};
+        const slot: { worker: Worker } = {} as { worker: Worker };
         slot.worker = createSlotWorker(slot);
         workerSlots.push(slot);
     }
@@ -158,7 +158,7 @@ async function renderAndRecognize(page, pageNum, url, maxDim, timeoutMs, slot) {
     ]);
     const blob = await canvas.convertToBlob({ type: 'image/png' });
 
-    const ocrResult = await runOcrOnImage(slot, blob, pageNum, url, pageWidth, pageHeight, timeoutMs);
+    const ocrResult = await runOcrOnImage(slot, blob, pageNum, url, pageWidth, pageHeight, timeoutMs) as any;
     return {
         words: ocrResult.words || [],
         imageWidth: ocrResult.imageWidth,
@@ -174,7 +174,7 @@ async function processPageOnWorker(pdfDoc, pageNum, url, fileName, slot) {
         try {
             return await renderAndRecognize(page, pageNum, url, maxDim, STEP_TIMEOUT_MS, slot);
         } catch (err) {
-            console.warn(`[OCR] Page ${pageNum} failed at ${maxDim}px:`, err.message);
+            console.warn(`[OCR] Page ${pageNum} failed at ${maxDim}px:`, (err as Error).message);
         }
     }
     return null;
@@ -242,7 +242,7 @@ async function startOcrForFile(url) {
         dom.statusBar.textContent = `OCR ${completed}/${totalToProcess} pages - ${elapsed}s - ${fileName}`;
     }, 2000);
 
-    await new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
         function checkCompletion() {
             if (completed >= totalToProcess) resolve();
         }
@@ -361,7 +361,7 @@ async function startOcrForFile(url) {
         docData._ocrCounts = counts;
         docData._ocrTotalMatches = totalMatches;
         for (const [kw, c] of Object.entries(counts)) {
-            docData.counts[kw] = (docData.counts[kw] || 0) + c;
+            docData.counts[kw] = (docData.counts[kw] || 0) + (c as number);
         }
     }
 

@@ -1,7 +1,7 @@
-let cachedKeywordRegex = null;
-let cachedKeywordList = null;
+let cachedKeywordRegex: RegExp | null = null;
+let cachedKeywordList: string | null = null;
 
-export function getKeywordRegex(keywords) {
+export function getKeywordRegex(keywords: string[] | null | undefined): RegExp | null {
     if (!keywords) return null;
     if (!Array.isArray(keywords)) return null;
 
@@ -26,12 +26,15 @@ export function getKeywordRegex(keywords) {
     return cachedKeywordRegex;
 }
 
-export function clearKeywordRegexCache() {
+export function clearKeywordRegexCache(): void {
     cachedKeywordRegex = null;
     cachedKeywordList = null;
 }
 
-export function normalizeKeywordMatch(match, keywords) {
+export function normalizeKeywordMatch(
+    match: RegExpExecArray,
+    keywords?: string[] | Map<string, string> | null
+): string | null {
     if (match[0].length < 3) return null;
     if (!/[a-zA-Z]/.test(match[0])) return null;
     const lower = match[0].toLowerCase();

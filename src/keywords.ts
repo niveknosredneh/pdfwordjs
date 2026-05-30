@@ -1,7 +1,7 @@
-import { state } from './state.js';
-import * as dom from './dom.js';
-import { clearKeywordRegexCache, getKeywordRegex } from './keyword-regex.js';
-import { fn, setKeywords, setKeywordLists, setDefaultListName } from './cross.js';
+import { state } from './state';
+import * as dom from './dom';
+import { clearKeywordRegexCache, getKeywordRegex } from './keyword-regex';
+import { fn, setKeywords, setKeywordLists, setDefaultListName } from './cross';
 
 let DEFAULT_LIST_NAME = 'Central Supply-Only';
 let KEYWORD_LISTS = {};
@@ -150,9 +150,9 @@ export function populateKeywordSelect() {
     const isDocx = state.currentDocType !== 'pdf';
     KEYWORDS.forEach(k => {
         const count = isDocx
-            ? (state.searchCache._docCounts?.[k] || 0)
+            ? ((state.searchCache as any)._docCounts?.[k] || 0)
             : (state.searchCache[k]?.length || 0);
-        if (count > 0) {
+        if ((count as number) > 0) {
             const opt = document.createElement('option');
             opt.value = k;
             opt.textContent = `${k} (${count})`;
@@ -177,7 +177,7 @@ function trapFocus(modal, focusAfterClosed) {
     function handler(e) {
         if (e.key === 'Escape') {
             if (modal === dom.keywordMenu) {
-                toggleKeywordManager();
+                toggleKeywordManager(dom.keywordMenu);
             } else if (modal.classList.contains('show')) {
                 hideNewListDialog();
             }
@@ -233,9 +233,9 @@ export function toggleKeywordManager(e) {
         }, 0);
     } else {
         document.removeEventListener('click', closeKeywordMenuOnClickOutside);
-        if (typeof menu._trapCleanup === 'function') {
-            menu._trapCleanup();
-            delete menu._trapCleanup;
+        if (typeof (menu as any)._trapCleanup === 'function') {
+            (menu as any)._trapCleanup();
+            delete (menu as any)._trapCleanup;
         }
     }
 }
@@ -249,9 +249,9 @@ function closeKeywordMenuOnClickOutside(e) {
     if (!menu.contains(e.target) && e.target !== dom.kwManageBtn) {
         menu.classList.remove('visible');
         document.removeEventListener('click', closeKeywordMenuOnClickOutside);
-        if (typeof menu._trapCleanup === 'function') {
-            menu._trapCleanup();
-            delete menu._trapCleanup;
+        if (typeof (menu as any)._trapCleanup === 'function') {
+            (menu as any)._trapCleanup();
+            delete (menu as any)._trapCleanup;
         }
     }
 }
@@ -310,7 +310,7 @@ function showNewListDialog() {
     document.addEventListener('keydown', handler);
     dialog.addEventListener('click', backdrop);
 
-    dialog._trapCleanup = () => {
+    (dialog as any)._trapCleanup = () => {
         document.removeEventListener('keydown', handler);
         dialog.removeEventListener('click', backdrop);
         dom.kwListSelector?.focus();
@@ -321,9 +321,9 @@ function hideNewListDialog() {
     const dialog = dom.newListDialog;
     if (!dialog) return;
     dialog.classList.remove('show');
-    if (typeof dialog._trapCleanup === 'function') {
-        dialog._trapCleanup();
-        delete dialog._trapCleanup;
+    if (typeof (dialog as any)._trapCleanup === 'function') {
+        (dialog as any)._trapCleanup();
+        delete (dialog as any)._trapCleanup;
     }
 }
 
@@ -362,8 +362,7 @@ function saveCurrentList() {
     updateList(listName, lines);
     switchKeywordList(listName);
 
-    toggleKeywordManager();
-
+    toggleKeywordManager(dom.keywordMenu);
     if (typeof fn._performSearch === 'function') {
         fn._performSearch();
     }
@@ -397,7 +396,7 @@ function importKeywords() {
     input.accept = '.json';
 
     input.addEventListener('change', (e) => {
-        const file = e.target.files[0];
+        const file = (e.target as HTMLInputElement).files[0];
         if (!file) return;
         if (file.size > 1024 * 1024) {
             alert('File too large. Maximum import size is 1 MB.');
@@ -407,7 +406,7 @@ function importKeywords() {
         const reader = new FileReader();
         reader.addEventListener('load', (event) => {
             try {
-                const text = event.target.result;
+                const text = (event.target as FileReader).result as string;
                 if (text.length > 1024 * 1024) {
                     alert('File content too large.');
                     return;

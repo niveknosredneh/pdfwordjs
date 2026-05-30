@@ -1,7 +1,7 @@
-import { state } from './state.js';
-import * as dom from './dom.js';
-import { fn, KEYWORDS } from './cross.js';
-import { getFileIcon, getFileType } from './file-handler.js';
+import { state } from './state';
+import * as dom from './dom';
+import { fn, KEYWORDS } from './cross';
+import { getFileIcon, getFileType } from './file-handler';
 
 let _loadDocument, _cycleSearch, _cycleDocSearch, _cycleAllKeywords, _cycleAllDocKeywords, _closeMobileSidebar;
 
@@ -14,7 +14,7 @@ function applyPulseStyle() {
     const opacity = 0.3 + (phase * 0.5 + 0.5) * 0.7;
     const isLight = document.documentElement.getAttribute('data-theme') === 'light';
     document.documentElement.style.setProperty('--pulse-color', isLight ? '#000' : '#fff');
-    document.documentElement.style.setProperty('--pulse-opacity', opacity);
+    document.documentElement.style.setProperty('--pulse-opacity', String(opacity));
 }
 
 function syncOcrPulse() {
@@ -187,11 +187,11 @@ function renderTree(node, path = '') {
             }
         }
 
-        const totalMatches = Object.values(doc.counts).reduce((a, b) => a + b, 0);
+        const totalMatches = (Object.values((doc as any).counts || {}).reduce((a: any, b: any) => a + b, 0) as number);
         if (totalMatches > 0) {
             const countSpan = document.createElement('span');
             countSpan.className = 'tree-count';
-            let displayText = totalMatches;
+            let displayText: string | number = totalMatches;
             if (state.allKeywordMode && state.currentDocUrl === doc.url) {
                 if (doc.type === 'pdf' && state.searchResults.length > 0 && state.currentMatchIndex >= 0) {
                     displayText = `${state.currentMatchIndex + 1}/${state.searchResults.length}`;
@@ -199,8 +199,7 @@ function renderTree(node, path = '') {
                     displayText = `${state.docCurrentMatchIndex + 1}/${state.docSearchResults.length}`;
                 }
             }
-            countSpan.textContent = displayText;
-            countSpan.title = 'Keyword matches';
+            countSpan.textContent = String(totalMatches);
 
             countSpan.addEventListener('click', function(e) {
                 e.stopPropagation();
@@ -244,8 +243,8 @@ function renderTree(node, path = '') {
             const searchCountSpan = document.createElement('span');
             searchCountSpan.className = 'tree-search-count';
 
-            let displayText = searchCount;
-            let isActive = state.globalSearchActiveDoc === doc.url && state.globalSearchQuery;
+            let displayText: string | number = searchCount;
+            let isActive: boolean = state.globalSearchActiveDoc === doc.url && !!state.globalSearchQuery;
             if (isActive) {
                 const results = state.globalSearchDocResults;
                 const currentIdx = state.globalSearchDocIndex;
@@ -256,7 +255,7 @@ function renderTree(node, path = '') {
                 }
             }
 
-            searchCountSpan.textContent = displayText;
+            searchCountSpan.textContent = String(displayText);
             searchCountSpan.title = isActive ? 'Click for next match' : `Click to view ${searchCount} matches`;
 
             searchCountSpan.addEventListener('click', function(e) {
@@ -402,15 +401,15 @@ export function updateSidebarBadge() {
                 const doc = state.docDataCache[state.currentDocUrl];
                 if (doc) {
                     const total = Object.values(doc.counts).reduce((a, b) => a + b, 0);
-                    countSpan.textContent = total || 0;
+                    countSpan.textContent = String(total || 0);
                 }
             }
         }
     }
 
     document.querySelectorAll('.kw-grid-cell').forEach(cell => {
-        const k = cell.dataset.keyword;
-        const total = parseInt(cell.dataset.count) || 0;
+        const k = (cell as HTMLElement).dataset.keyword;
+        const total = parseInt((cell as HTMLElement).dataset.count) || 0;
         const countSpan = cell.querySelector('.kw-cell-count');
         
         const isActiveKeyword = k === state.activeKeyword;
@@ -422,7 +421,7 @@ export function updateSidebarBadge() {
             if (countSpan) countSpan.textContent = `${displayIndex}/${displayTotal}`;
             cell.classList.add('active');
         } else {
-            if (countSpan) countSpan.textContent = total;
+            if (countSpan) countSpan.textContent = String(total);
             cell.classList.remove('active');
         }
     });
@@ -484,7 +483,7 @@ export function updateKeywordGrid(url) {
         const count = doc.counts[k] || 0;
         if (count > 0) {
             let isActive = k === state.activeKeyword;
-            let countText = count;
+            let countText = String(count);
             if (state.allKeywordMode && state.currentMatchIndex >= 0) {
                 isActive = k === akwCurrentKeyword;
                 if (isActive) countText = `${akwKeywordLocalIndex}/${akwKeywordTotal}`;
@@ -504,7 +503,7 @@ export function updateKeywordGrid(url) {
         content.innerHTML = cells.join('');
         content.querySelectorAll('.kw-grid-cell').forEach(cell => {
             cell.addEventListener('click', () => {
-                const k = cell.dataset.keyword;
+                const k = (cell as HTMLElement).dataset.keyword;
                 state.allKeywordMode = false;
                 _closeMobileSidebar();
                 if (state.currentDocUrl === url) {

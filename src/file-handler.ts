@@ -1,7 +1,7 @@
-import { state } from './state.js';
-import * as dom from './dom.js';
-import { getKeywordRegex, normalizeKeywordMatch } from './keyword-regex.js';
-import { fn, pdfjsLib, JSZip, mammoth, KEYWORDS } from './cross.js';
+import { state } from './state';
+import * as dom from './dom';
+import { getKeywordRegex, normalizeKeywordMatch } from './keyword-regex';
+import { fn, pdfjsLib, JSZip, mammoth, KEYWORDS } from './cross';
 
 export function getFileType(filename) {
     const lower = filename.toLowerCase();
@@ -20,7 +20,7 @@ export function getFileIcon(filename) {
     return '<svg width="18" height="18" viewBox="0 0 24 24" fill="#757575"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/></svg>';
 }
 
-import { WorkerPool } from './worker-pool.js';
+import { WorkerPool } from './worker-pool';
 
 export function initWorkerPool() {
     if (!state.workerPool) {
@@ -319,7 +319,7 @@ export async function handleDrop(e) {
                     const zipFile = await new Promise((resolve, reject) => {
                         entry.file(resolve, reject);
                     });
-                    state.basePath = zipFile.name.replace(/\.zip$/i, '');
+                    state.basePath = (zipFile as any).name.replace(/\.zip$/i, '');
                     filesToProcess = filesToProcess.concat(await extractAllFromZip(zipFile));
                 } catch (err) {
                     showFileError(entry.name, 'Failed to read zip file: ' + (err.message || err));
@@ -355,12 +355,12 @@ async function traverseFileTree(item, fileList, baseDir = '') {
             const file = await new Promise((resolve, reject) => {
                 item.file(resolve, reject);
             });
-            file.relativePath = currentPath;
-            fileList.push(file);
-        } catch (err) {
-            showFileError(currentPath, 'Failed to read file: ' + (err.message || err));
-            return;
-        }
+			(file as any).relativePath = currentPath;
+			fileList.push(file);
+		} catch (err) {
+			showFileError(currentPath, 'Failed to read file: ' + (err.message || err));
+			return;
+		}
         if (fileList.length % 10 === 0) {
             dom.statusBar.textContent = 'Reading folder: found ' + fileList.length + ' files...';
         }
@@ -369,7 +369,7 @@ async function traverseFileTree(item, fileList, baseDir = '') {
         try {
             const dirReader = item.createDirectoryReader ? item.createDirectoryReader() : item.createReader();
             while (true) {
-                const batch = await new Promise((resolve) => dirReader.readEntries(resolve));
+                const batch: any[] = await new Promise((resolve) => dirReader.readEntries(resolve));
                 if (batch.length === 0) break;
                 entries.push(...batch);
             }
@@ -439,9 +439,9 @@ async function extractAllFromZip(zipFile) {
             if (type === 'docx') mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
             else if (type === 'doc') mimeType = 'application/msword';
             const file = new File([blob], path, { type: mimeType });
-            file.relativePath = path;
+            (file as any).relativePath = path;
             try {
-                file._cachedBuffer = await blob.arrayBuffer();
+                (file as any)._cachedBuffer = await blob.arrayBuffer();
             } catch (err) {
                 showFileError(path, 'Failed to read entry from ZIP: ' + (err.message || err));
                 updateProgress();
@@ -472,9 +472,9 @@ export function initFileHandler() {
         statusMsgs.forEach(el => el.remove());
 
         let filesToProcess = [];
-        const items = Array.from(e.target.files);
+        const items = Array.from((e.target as HTMLInputElement).files || []);
         const hasZip = items.some(f => f.name.toLowerCase().endsWith('.zip'));
-        const folderName = items.length > 0 ? (items[0].webkitRelativePath || '').split('/')[0] : '';
+        const folderName = items.length > 0 ? ((items[0] as any).webkitRelativePath || '').split('/')[0] : '';
 
         if (hasZip) {
             dom.statusBar.textContent = 'Processing ZIP file...';
@@ -485,15 +485,15 @@ export function initFileHandler() {
         }
 
         for (const file of items) {
-            const type = getFileType(file.name);
-            if (file.name.toLowerCase().endsWith('.zip')) {
+            const type = getFileType((file as any).name);
+            if ((file as any).name.toLowerCase().endsWith('.zip')) {
                 try {
                     filesToProcess = filesToProcess.concat(await extractAllFromZip(file));
                 } catch (err) {
-                    showFileError(file.name, 'Failed to process ZIP: ' + (err.message || err));
+                    showFileError((file as any).name, 'Failed to process ZIP: ' + (err.message || err));
                 }
             } else if (type) {
-                file.relativePath = file.webkitRelativePath || file.name;
+                (file as any).relativePath = (file as any).webkitRelativePath || (file as any).name;
                 filesToProcess.push(file);
             }
         }

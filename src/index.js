@@ -42,6 +42,8 @@ register('cycleAllKeywords', pdfSearch.cycleAllKeywords);
 register('clearHighlights', pdfSearch.clearHighlights);
 register('renderAllHighlights', pdfSearch.renderAllHighlights);
 register('renderHighlightsForPage', pdfSearch.renderHighlightsForPage);
+register('updateCurrentMatch', pdfSearch.updateCurrentMatch);
+register('repositionHighlights', pdfSearch.repositionHighlights);
 register('renderPageHeatmaps', pdfSearch.renderPageHeatmaps);
 
 register('loadDocxDoc', docxEngine.loadDocxDoc);

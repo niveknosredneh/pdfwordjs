@@ -51,7 +51,7 @@ export function clearSearch() {
 }
 
 export function clearAllResults() {
-    dom.resultsArea.innerHTML = '<h1 class="status-msg"><img src="icons/folder.svg" width="32" height="32" alt="folder"><img src="icons/pdf.svg" width="32" height="32" alt="pdf"><img src="icons/docx.svg" width="32" height="32" alt="docx"><img src="icons/zip.svg" width="32" height="32" alt="zip"></h1><h2 class="status-msg">Drop here to begin scanning</h2>';
+    dom.resultsArea.innerHTML = '<div class="drop-zone-empty"><div class="drop-zone-empty-icon"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M24 4L24 32M24 4L16 12M24 4L32 12"/><path d="M8 28L8 40C8 41.1 8.9 42 10 42L38 42C39.1 42 40 41.1 40 40L40 28"/></svg></div><h2 class="drop-zone-empty-title">Drop files to begin scanning</h2><p class="drop-zone-empty-text">PDF &middot; DOCX &middot; ZIP &mdash; any folder or archive</p></div>';
 
     if (dom.globalSearchInput) {
         dom.globalSearchInput.value = '';
@@ -700,6 +700,7 @@ export function updateToolbarState() {
 export function goToMatch(index) {
     if (state.searchResults.length === 0) return;
 
+    const prevIndex = state.currentMatchIndex;
     state.currentMatchIndex = ((index % state.searchResults.length) + state.searchResults.length) % state.searchResults.length;
     dom.matchInput.value = state.currentMatchIndex + 1;
     state.emit('badge-changed');
@@ -713,8 +714,7 @@ export function goToMatch(index) {
             const targetTop = pageEl.offsetTop + result.y * state.currentScale - (dom.viewerScroll.clientHeight / 2);
             dom.viewerScroll.scrollTo({ top: Math.max(0, targetTop), behavior: state.smoothScrollEnabled ? 'smooth' : 'auto' });
         }
-        fn.clearHighlights();
-        fn.renderAllHighlights();
+        fn.updateCurrentMatch(prevIndex, state.currentMatchIndex);
         updateHeatmap();
     });
 

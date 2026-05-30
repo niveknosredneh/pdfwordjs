@@ -226,7 +226,7 @@ export function cycleAllKeywords() {
     dom.matchTotal.textContent = allResults.length;
     dom.matchInput.max = allResults.length;
     dom.matchInput.value = state.currentMatchIndex + 1;
-    renderAllHighlights();
+    if (!wasAlreadyAll) renderAllHighlights();
     state.emit('keywords-changed');
     state.emit('badge-changed');
     state.emit('heatmaps-changed');
@@ -311,7 +311,6 @@ export function cycleSearch(query) {
             dom.matchTotal.textContent = state.searchResults.length;
             dom.matchInput.max = state.searchResults.length;
             dom.matchInput.value = state.currentMatchIndex + 1;
-            renderAllHighlights();
             state.emit('keywords-changed');
             state.emit('heatmaps-changed');
             fn.goToMatch(state.currentMatchIndex);
@@ -339,6 +338,7 @@ export function renderAllHighlights() {
             if (result.x === null) return;
             const mark = document.createElement('div');
             mark.className = 'highlight-mark' + (globalIndex === state.currentMatchIndex ? ' current' : '');
+            mark.dataset.idx = globalIndex;
             mark.style.left = (result.x * state.currentScale) + 'px';
             mark.style.top = (result.y * state.currentScale) + 'px';
             mark.style.width = (result.width * state.currentScale) + 'px';
@@ -346,6 +346,27 @@ export function renderAllHighlights() {
             fragment.appendChild(mark);
         });
         pageEl.appendChild(fragment);
+    }
+}
+
+export function updateCurrentMatch(oldIndex, newIndex) {
+    if (oldIndex === newIndex) return;
+    const prev = document.querySelector(`.highlight-mark[data-idx="${oldIndex}"]`);
+    const next = document.querySelector(`.highlight-mark[data-idx="${newIndex}"]`);
+    if (prev) prev.classList.remove('current');
+    if (next) next.classList.add('current');
+}
+
+export function repositionHighlights() {
+    for (const mark of document.querySelectorAll('.highlight-mark')) {
+        const idx = parseInt(mark.dataset.idx);
+        if (isNaN(idx)) continue;
+        const result = state.searchResults[idx];
+        if (!result || result.x === null) continue;
+        mark.style.left = (result.x * state.currentScale) + 'px';
+        mark.style.top = (result.y * state.currentScale) + 'px';
+        mark.style.width = (result.width * state.currentScale) + 'px';
+        mark.style.height = (result.height * state.currentScale) + 'px';
     }
 }
 
@@ -362,6 +383,7 @@ export function renderHighlightsForPage(pageNum) {
         if (result.x === null) return;
         const mark = document.createElement('div');
         mark.className = 'highlight-mark' + (globalIndex === state.currentMatchIndex ? ' current' : '');
+        mark.dataset.idx = globalIndex;
         mark.style.left = (result.x * state.currentScale) + 'px';
         mark.style.top = (result.y * state.currentScale) + 'px';
         mark.style.width = (result.width * state.currentScale) + 'px';

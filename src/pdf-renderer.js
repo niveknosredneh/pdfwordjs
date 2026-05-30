@@ -396,10 +396,9 @@ export function setZoom(newScale, force = false) {
 
     cancelAllRenders();
 
-    fn.clearHighlights();
-    if (state.searchResults.length > 0) fn.renderAllHighlights();
+    if (state.searchResults.length > 0) fn.repositionHighlights();
     state.emit('heatmaps-changed');
-    fn.refreshAllMeasurements();
+    requestAnimationFrame(() => fn.refreshAllMeasurements());
 
     requestAnimationFrame(() => {
         // Force layout flush so offsetTop/offsetHeight reflect the new zoom

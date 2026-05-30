@@ -738,7 +738,7 @@ export function setupEventListeners() {
     /* Settings menu buttons */
     dom.settingsKwBtn?.addEventListener('click', () => {
         toggleSettings();
-        keywords.toggleKeywordManager(dom.keywordMenu);
+        keywords.toggleKeywordManager();
     });
     dom.settingsThemeBtn?.addEventListener('click', () => {
         toggleTheme();
@@ -840,7 +840,7 @@ export function setupEventListeners() {
             }
             const kwMenu = document.getElementById('keywordMenu');
             if (kwMenu && kwMenu.classList.contains('visible')) {
-                keywords.toggleKeywordManager(dom.keywordMenu);
+                keywords.toggleKeywordManager();
             }
             dom.pageInput.blur();
             dom.matchInput.blur();
@@ -934,27 +934,32 @@ export function setupEventListeners() {
         });
     }
 
+    let _scrollRAF = null;
     dom.viewerScroll.addEventListener('scroll', () => {
-        if (!dom.viewer.children.length) return;
-        if (state.isNavigating) return;
+        if (_scrollRAF) return;
+        _scrollRAF = requestAnimationFrame(() => {
+            _scrollRAF = null;
+            if (!dom.viewer.children.length) return;
+            if (state.isNavigating) return;
 
-        const scrollTop = dom.viewerScroll.scrollTop;
-        const containerHeight = dom.viewerScroll.clientHeight;
-        const scrollHeight = dom.viewerScroll.scrollHeight;
-        const midPoint = scrollTop + containerHeight / 2;
+            const scrollTop = dom.viewerScroll.scrollTop;
+            const containerHeight = dom.viewerScroll.clientHeight;
+            const scrollHeight = dom.viewerScroll.scrollHeight;
+            const midPoint = scrollTop + containerHeight / 2;
 
-        let detectedPage = null;
-        for (let i = 1; i <= state.totalPages; i++) {
-            const pageEl = document.getElementById('page-' + i);
-            if (!pageEl) continue;
-            const pageTop = pageEl.offsetTop;
-            const pageBottom = pageTop + pageEl.offsetHeight;
-            if (midPoint < pageBottom) { detectedPage = i; break; }
-        }
+            let detectedPage = null;
+            for (let i = 1; i <= state.totalPages; i++) {
+                const pageEl = document.getElementById('page-' + i);
+                if (!pageEl) continue;
+                const pageTop = pageEl.offsetTop;
+                const pageBottom = pageTop + pageEl.offsetHeight;
+                if (midPoint < pageBottom) { detectedPage = i; break; }
+            }
 
-        if (!detectedPage && scrollTop + containerHeight >= scrollHeight - 50) detectedPage = state.totalPages;
-        if (detectedPage && detectedPage !== state.currentPage) { state.currentPage = detectedPage; updatePageInfo(); }
-        if (state.searchResults.length > 0) updateHeatmap();
+            if (!detectedPage && scrollTop + containerHeight >= scrollHeight - 50) detectedPage = state.totalPages;
+            if (detectedPage && detectedPage !== state.currentPage) { state.currentPage = detectedPage; updatePageInfo(); }
+            if (state.searchResults.length > 0) updateHeatmap();
+        });
     });
 
     const resizer = document.getElementById('resizer');
@@ -1171,12 +1176,7 @@ export function cycleGlobalSearch() {
     }
 
     if (customSearchResults.length > 0) {
-        const idx = _findCustomResultAfterScroll();
-        if (idx >= 0) {
-            customGoToMatch(idx);
-        } else {
-            customGoToMatch(customSearchIndex + 1);
-        }
+        customGoToMatch(customSearchIndex + 1);
         state.globalSearchDocIndex = customSearchIndex;
         state.globalSearchDocResults = [...customSearchResults];
     }
@@ -1191,12 +1191,7 @@ export function cycleGlobalSearchPrev() {
     }
 
     if (customSearchResults.length > 0) {
-        const idx = _findCustomResultBeforeScroll();
-        if (idx >= 0) {
-            customGoToMatch(idx);
-        } else {
-            customGoToMatch(customSearchIndex - 1);
-        }
+        customGoToMatch(customSearchIndex - 1);
         state.globalSearchDocIndex = customSearchIndex;
         state.globalSearchDocResults = [...customSearchResults];
     }

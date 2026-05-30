@@ -177,7 +177,7 @@ function trapFocus(modal, focusAfterClosed) {
     function handler(e) {
         if (e.key === 'Escape') {
             if (modal === dom.keywordMenu) {
-                toggleKeywordManager(dom.keywordMenu);
+                toggleKeywordManager();
             } else if (modal.classList.contains('show')) {
                 hideNewListDialog();
             }
@@ -202,7 +202,7 @@ function trapFocus(modal, focusAfterClosed) {
     };
 }
 
-export function toggleKeywordManager(e) {
+export function toggleKeywordManager(e?) {
     if (e) e.stopPropagation();
 
     const menu = dom.keywordMenu;
@@ -362,7 +362,7 @@ function saveCurrentList() {
     updateList(listName, lines);
     switchKeywordList(listName);
 
-    toggleKeywordManager(dom.keywordMenu);
+    toggleKeywordManager();
     if (typeof fn._performSearch === 'function') {
         fn._performSearch();
     }

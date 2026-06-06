@@ -16,11 +16,7 @@ try {
     commitDate = execSync('git log -1 --format=%cd --date=short', { encoding: 'utf8', cwd: __dirname }).trim();
 } catch (e) { /* not a git repo or no git */ }
 
-const bundleHash = crypto.createHash('md5')
-    .update(fs.readFileSync(path.join(__dirname, 'src/index.js')))
-    .update(fs.readFileSync(path.join(__dirname, 'src/style.css')))
-    .digest('hex')
-    .slice(0, 8);
+const HASH_PLACEHOLDER = 'KWPBF_HASH_PLACEHOLDER_8c3a';
 
 await esbuild.build({
     entryPoints: [path.join(__dirname, 'src/index.js')],
@@ -31,10 +27,18 @@ await esbuild.build({
     define: {
         'process.env.NODE_ENV': '"production"',
         'WORKER_BASE': '"utils/"',
-        '__BUNDLE_HASH__': '"' + bundleHash + '"',
+        '__BUNDLE_HASH__': '"' + HASH_PLACEHOLDER + '"',
         '__COMMIT_DATE__': '"' + commitDate + '"',
     },
 });
+
+const bundleContent = fs.readFileSync(path.join(dist, 'bundle.js'), 'utf8');
+const bundleHash = crypto.createHash('md5')
+    .update(bundleContent)
+    .digest('hex')
+    .slice(0, 8);
+
+fs.writeFileSync(path.join(dist, 'bundle.js'), bundleContent.replace(HASH_PLACEHOLDER, bundleHash));
 
 function copy(src, dest) { fs.cpSync(path.join(__dirname, src), path.join(dist, dest), { recursive: true }); }
 

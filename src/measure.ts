@@ -1137,6 +1137,7 @@ function getOrCreateLayer(pageEl) {
 }
 
 export function refreshAllMeasurements() {
+    markCommittedDirty();
     renderAllMeasurements();
 }
 

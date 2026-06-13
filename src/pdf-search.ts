@@ -238,7 +238,7 @@ export function cycleAllKeywords() {
     dom.matchTotal.textContent = String(allResults.length);
     dom.matchInput.max = String(allResults.length);
     dom.matchInput.value = String(state.currentMatchIndex + 1);
-    if (!wasAlreadyAll) renderAllHighlights();
+    renderAllHighlights();
     state.emit('keywords-changed');
     state.emit('badge-changed');
     state.emit('heatmaps-changed');
@@ -311,6 +311,8 @@ export function cycleSearch(query) {
     state.allKeywordMode = false;
 
     if (state.searchCache[query] !== undefined) {
+        const prevKeyword = state.activeKeyword;
+
         state.searchResults = state.searchCache[query];
         appendOcrResults(query);
         buildSearchResultsByPage();
@@ -319,12 +321,16 @@ export function cycleSearch(query) {
         if (state.searchResults.length > 0) {
             dom.navGroup.classList.add('active');
             dom.navSep.style.display = '';
-            state.currentMatchIndex = (state.currentMatchIndex + 1) % state.searchResults.length;
+            const wasSameQuery = prevKeyword === query && state.currentMatchIndex >= 0;
+            state.currentMatchIndex = wasSameQuery
+                ? (state.currentMatchIndex + 1) % state.searchResults.length
+                : 0;
             dom.matchTotal.textContent = String(state.searchResults.length);
             dom.matchInput.max = String(state.searchResults.length);
             dom.matchInput.value = String(state.currentMatchIndex + 1);
             state.emit('keywords-changed');
             state.emit('heatmaps-changed');
+            renderAllHighlights();
             fn.goToMatch(state.currentMatchIndex);
         } else {
             dom.navGroup.classList.remove('active');

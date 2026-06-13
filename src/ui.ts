@@ -316,6 +316,7 @@ function performInlineSearch(query) {
     updateToolbarState();
 
     if (mappedResults.length > 0) {
+        fn.renderAllHighlights();
         goToMatch(0);
     } else {
         fn.clearHighlights();

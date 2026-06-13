@@ -242,6 +242,7 @@ export function cycleAllKeywords() {
     state.emit('keywords-changed');
     state.emit('badge-changed');
     state.emit('heatmaps-changed');
+    state.emit('results-changed');
     fn.startPrerender();
     fn.goToMatch(state.currentMatchIndex);
 }

@@ -382,6 +382,8 @@ input, select, button, textarea {
     color: var(--grey-300);
     transition: background 0.15s, font-weight 0.15s;
     white-space: nowrap;
+    user-select: none;
+    -webkit-user-select: none;
 }
 .file:hover { background: var(--accent-bg); font-weight: 500; }
 .file.active {

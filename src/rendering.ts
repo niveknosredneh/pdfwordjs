@@ -296,6 +296,16 @@ function renderTree(node, path = '') {
 
         fileSpan.addEventListener('click', function(e) {
             e.stopPropagation();
+            const onSameDoc = state.currentDocUrl === doc.url;
+
+            if (onSameDoc) {
+                _closeMobileSidebar();
+                if (doc.type === 'pdf') _cycleAllKeywords();
+                else _cycleAllDocKeywords();
+                renderResultsArea();
+                return;
+            }
+
             _loadDocument(doc.url);
             _closeMobileSidebar();
             renderResultsArea();
